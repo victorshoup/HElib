@@ -249,8 +249,15 @@ long PAlgebra::frobenuisPow(long j) const
 
 long PAlgebra::genToPow(long i, long j) const
 {
-  //OLD: assert(i >= -1 && i < LONG(gens.size()));
-  helib::assertInRange(i, -1l, LONG(gens.size()), "Generator at index i does not exists (Index out of range) and i is not -1 (Frobenius)");
+  long sz = gens.size();
+
+  if (i == sz) {
+    helib::assertTrue(j == 0, "PAlgebra::genToPow: i == sz but j != 0");
+    return 1;
+  }
+
+  helib::assertTrue(i >= -1 && i < LONG(gens.size()),
+           "PAlgebra::genToPow: bad dim");
 
   long res;
   if (i == -1)
