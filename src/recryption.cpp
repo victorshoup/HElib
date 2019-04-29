@@ -308,8 +308,11 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   double skSize = sampleHWtBoundedEffectiveBound(context, targetWeight);
 
+
   double magicConst = context.zMStar.get_cM();
   double factor = (skSize+1) * magicConst * 2;
+  cerr << "*** setAE: t=" << targetWeight  << " factor/sqrt(t)=" << (factor/sqrt(double(targetWeight))) << "\n"; 
+
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
   long frstTerm = 2*(p2r+1);
@@ -355,8 +358,11 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
       skSize = sampleHWtBoundedEffectiveBound(context, targetWeight);
       if (targetWeight>256 || bound*(skSize+1) >= p2e)
 	break;
+
     }
     targetWeight--;
+    double factor = (skSize+1) * magicConst * 2;
+    cerr << "****** setAE: t=" << targetWeight  << " factor/sqrt(t)=" << (factor/sqrt(double(targetWeight))) << "\n"; 
   }
 
 #ifdef DEBUG_PRINTOUT

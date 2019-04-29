@@ -1,4 +1,4 @@
-/* Copyright (C) 2012-2018 IBM Corp.
+/* Copyright (C) 2012-2017 IBM Corp.
  * This program is Licensed under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
@@ -9,25 +9,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. See accompanying LICENSE file.
  */
+
+/* Test_bootstrapping.cpp - Testing the recryption procedure */
+
+#if defined(__unix__) || defined(__unix) || defined(unix)
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
+
+#include <NTL/ZZ.h>
+#include <NTL/fileio.h>
 #include <NTL/BasicThreadPool.h>
-#include "FHE.h"
+NTL_CLIENT
+#include <cassert>
 #include "EncryptedArray.h"
+#include "EvalMap.h"
+#include "powerful.h"
 #include "matmul.h"
 #include "debugging.h"
-
-NTL_CLIENT
 
 static bool noPrint = false;
 static bool dry = false; // a dry-run flag
 static bool debug = 0;   // a debug flag
 static int scale = 0;
 
+extern long printFlag;
+
 
 #define OUTER_REP (1)
+#define INNER_REP (1)
 
 
 static Vec<long> global_mvec, global_gens, global_ords;
 static int c_m = 100;
+
 
 void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 {
@@ -67,6 +82,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     context.scale = scale;
   }
 
+
   context.zMStar.set_cM(c_m/100.0);
   buildModChain(context, L, c, /*willBeBootstrappable=*/true);
 
@@ -82,23 +98,21 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     std::cout << "scale=" << context.scale<<endl;
   }
 
-  context.makeBootstrappable(mvec,/*t=*/skHwt,build_cache,/*alsoThick=*/false);
-  // save time...disable some fat boot precomputation
 
+
+  context.makeBootstrappable(mvec, /*t=*/skHwt, build_cache);
   t += GetTime();
 
-  //if (skHwt>0) context.rcData.skHwt = skHwt;
   if (!noPrint) {
     cout << " done in "<<t<<" seconds\n";
     cout << "  e="    << context.rcData.e
 	 << ", e'="   << context.rcData.ePrime
-	 << ", a="<< context.rcData.a
+	 << ", a="    << context.rcData.a
 	 << ", t="    << context.rcData.skHwt
 	 << "\n  ";
     context.zMStar.printout();
   }
   setDryRun(dry); // Now we can set the dry-run flag if desired
-
 
   long p2r = context.alMod.getPPowR();
 
@@ -107,7 +121,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   t = -GetTime();
   if (!noPrint) cout << "Generating keys, " << std::flush;
   FHESecKey secretKey(context);
-  secretKey.GenSecKey(64);      // A Hamming-weight-64 secret key
+  FHEPubKey& publicKey = secretKey;
+  secretKey.GenSecKey();      // A +-1/0 secret key
   addSome1DMatrices(secretKey); // compute key-switching matrices that we need
   addFrbMatrices(secretKey);
   if (!noPrint) cout << "computing key-dependent tables..." << std::flush;
@@ -115,65 +130,77 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   t += GetTime();
   if (!noPrint) cout << " done in "<<t<<" seconds\n";
 
-  FHEPubKey publicKey = secretKey;
-
-  long d = context.zMStar.getOrdP();
-  long phim = context.zMStar.getPhiM();
-  long nslots = phim/d;
-
-  // GG defines the plaintext space Z_p[X]/GG(X)
-  ZZX GG;
-  GG = context.alMod.getFactorsOverZZ()[0];
-  EncryptedArray ea(context, GG);
-
-  if (debug) {
-    dbgKey = &secretKey;
-    dbgEa = &ea;
-  }
-
   zz_p::init(p2r);
-  Vec<zz_p> val0(INIT_SIZE, nslots);
-  for (auto& x: val0)
-    random(x);
+  zz_pX poly_p = random_zz_pX(context.zMStar.getPhiM());
+  PowerfulConversion pConv(context.rcData.p2dConv->getIndexTranslation());
+  HyperCube<zz_p> powerful(pConv.getShortSig());
+  pConv.polyToPowerful(powerful, poly_p);
+  ZZX ptxt_poly = conv<ZZX>(poly_p);
+  PolyRed(ptxt_poly, p2r, true); // reduce to the symmetric interval
 
-  vector<ZZX> val1;
-  val1.resize(nslots);
-  for (long i = 0; i < nslots; i++) {
-    val1[i] = conv<ZZX>(conv<ZZ>(rep(val0[i])));
-  }
+#ifdef DEBUG_PRINTOUT
+  dbgKey = &secretKey; // debugging key and ea
+  dbgEa = context.rcData.ea; // EA for plaintext space p^{e+r-e'}
+  dbg_ptxt = ptxt_poly;
+  context.rcData.p2dConv->ZZXtoPowerful(ptxt_pwr, dbg_ptxt);
+  vecRed(ptxt_pwr, ptxt_pwr, p2r, true);
+  if (dbgEa->size()>100) printFlag = 0; // don't print too many slots
+#endif
 
-  vector<ZZX> val_const1;
-  val_const1.resize(nslots);
-  for (long i = 0; i < nslots; i++) {
-    val_const1[i] = 1;
-  }
-
+  ZZX poly2;
   Ctxt c1(publicKey);
-  ea.encrypt(c1, publicKey, val1);
 
-  Ctxt c2(c1);
-  if (!noPrint) CheckCtxt(c2, "before recryption");
+  secretKey.Encrypt(c1,ptxt_poly,p2r);
 
-  publicKey.thinReCrypt(c2);
-  if (!noPrint) CheckCtxt(c2, "after recryption");
 
-  vector<ZZX> val2;
-  ea.decrypt(c2, secretKey, val2);
+  Ctxt c_const1(publicKey);
+  secretKey.Encrypt(c_const1, ZZX(1), p2r);
 
-  if (val1 == val2) 
-    cout << "GOOD\n";
-  else
-    cout << "BAD\n";
+  c1.multiplyBy(c_const1);
+
+  for (long num=0; num<INNER_REP; num++) { // multiple tests with same key
+    publicKey.reCrypt(c1);
+    secretKey.Decrypt(poly2,c1);
+
+    if (ptxt_poly == poly2) cout << "GOOD\n";
+    else if (!isDryRun()) { // bootsrtapping error
+      cout << "BAD\n";
+#ifdef DEBUG_PRINTOUT
+      conv(poly_p,poly2);
+      HyperCube<zz_p> powerful2(pConv.getShortSig());
+      cout << "decryption error, encrypted ";
+      printVec(cout, powerful.getData())<<endl;
+
+      pConv.polyToPowerful(powerful2, poly_p);
+      cout << "                after reCrypt ";
+      printVec(cout, powerful2.getData())<<endl;
+      long numDiff = 0;
+      for (long i=0; i<powerful.getSize(); i++) 
+        if (powerful[i] != powerful2[i]) {
+          numDiff++;
+          cout << i << ": " << powerful[i] << " != " << powerful2[i]<<", ";
+          if (numDiff >5) break;
+        }
+#endif
+      exit(0);
+    }
   }
+  }
+  if (!noPrint) printAllTimers();
+  resetAllTimers();
+#if (defined(__unix__) || defined(__unix) || defined(unix))
+    struct rusage rusage;
+    getrusage( RUSAGE_SELF, &rusage );
+    if (!noPrint) cout << "  rusage.ru_maxrss="<<rusage.ru_maxrss << endl;
+#endif
 }
-
-
-//extern long fhe_disable_intFactor;
-extern long fhe_disable_fat_boot;
-extern long fhe_force_chen_han;
 
 /********************************************************************
  ********************************************************************/
+
+//extern long fhe_disable_intFactor;
+extern long fhe_force_chen_han;
+
 int main(int argc, char *argv[]) 
 {
   ArgMapping amap;
@@ -195,7 +222,8 @@ int main(int argc, char *argv[])
   amap.note("p^r is the plaintext-space modulus");
 
   amap.arg("c", c, "number of columns in the key-switching matrices");
-  amap.arg("L", L, "# of levels in the modulus chain");
+  amap.arg("L", L, "# of bits in the modulus chain");
+  amap.arg("N", N, "lower-bound on phi(m)");
   amap.arg("t", t, "Hamming weight of recryption secret key", "heuristic");
   amap.arg("dry", dry, "dry=1 for a dry-run");
   amap.arg("nthreads", nthreads, "number of threads");
@@ -203,8 +231,10 @@ int main(int argc, char *argv[])
   amap.arg("noPrint", noPrint, "suppress printouts");
   amap.arg("useCache", useCache, "0: zzX cache, 1: DCRT cache");
 
+
   amap.arg("force_bsgs", fhe_test_force_bsgs);
   amap.arg("force_hoist", fhe_test_force_hoist);
+
 
   //  amap.arg("disable_intFactor", fhe_disable_intFactor);
   amap.arg("chen_han", fhe_force_chen_han);
@@ -212,11 +242,11 @@ int main(int argc, char *argv[])
   amap.arg("debug", debug, "generate debugging output");
   amap.arg("scale", scale, "scale parameter");
 
+
   amap.arg("gens", global_gens);
   amap.arg("ords", global_ords);
   amap.arg("mvec", global_mvec);
   amap.arg("c_m", c_m);
-
 
   amap.parse(argc, argv);
 
@@ -227,6 +257,7 @@ int main(int argc, char *argv[])
     SetSeed(ZZ(seed));
 
   SetNumThreads(nthreads);
+
 
   TestIt(p,r,L,c,t,useCache);
 
