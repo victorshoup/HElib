@@ -310,8 +310,12 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
 
   double magicConst = context.zMStar.get_cM();
-  double factor = (skSize+1) * magicConst * 2;
-  cerr << "*** setAE: t=" << targetWeight  << " factor/sqrt(t)=" << (factor/sqrt(double(targetWeight))) << "\n"; 
+  double coeff_bound = (skSize+1) * magicConst;
+  // coeff_bound is ultimately a high prob bound on |w0+w1*s|,
+  // the coeffs of w0, w1 are chosen uniformly on [-1/2,1/2]
+
+  double factor = coeff_bound * 2;
+  cerr << "*** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
 
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
@@ -361,8 +365,8 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
     }
     targetWeight--;
-    double factor = (skSize+1) * magicConst * 2;
-    cerr << "****** setAE: t=" << targetWeight  << " factor/sqrt(t)=" << (factor/sqrt(double(targetWeight))) << "\n"; 
+    double coeff_bound = (skSize+1) * magicConst;
+    cerr << "****** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
   }
 
 #ifdef DEBUG_PRINTOUT
