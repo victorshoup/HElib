@@ -35,6 +35,10 @@ static void
 printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
                    const RecryptData& rcData, long q, double noise);
 
+static void
+checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
+                   const RecryptData& rcData, long q);
+
 // Return in poly a polynomial with X^i encoded in all the slots
 static void x2iInSlots(ZZX& poly, long i,
 		       vector<ZZX>& xVec, const EncryptedArray& ea)
@@ -51,6 +55,75 @@ static void x2iInSlots(ZZX& poly, long i,
 // integer z can be made divisible by p2e via z' = z + u*p2r + v*q,
 // with |u|*p2r <= a and |v| <= p2e/2 -a.
 // Returns the largest absolute values of the u's and the new entries.
+
+static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a, 
+                          const FHEcontext& context)
+{
+  //OLD: assert(q>0 && p2e>0 && p2r>0 && a>=0 && q % p2e == 1 && a % p2r == 0 && a*2 < p2e);
+  helib::assertTrue<helib::InvalidArgument>(q > 0l, "q must be positive");
+  helib::assertTrue<helib::InvalidArgument>(p2e > 0l, "p2e must be positive");
+  helib::assertTrue<helib::InvalidArgument>(p2r > 0l, "p2r must be positive");
+  helib::assertTrue<helib::InvalidArgument>(a >= 0l, "a must be non-negative");
+
+  helib::assertEq<helib::InvalidArgument>(q % p2e, 1l, "q must equal 1 modulo p2e");
+  helib::assertEq<helib::InvalidArgument>(a % p2r, 0l, "p2r must divide a");
+
+  helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
+
+
+  const RecryptData& rcData = context.rcData;
+  const PowerfulDCRT& p2d_conv = *rcData.p2dConv;
+
+  long aa = a / p2r;
+
+  Vec<ZZ> pwrfl;
+  p2d_conv.ZZXtoPowerful(pwrfl, poly);
+
+
+#ifdef DEBUG_PRINTOUT
+  zzX uVec(INIT_SIZE, pwrfl.length());
+  zzX vVec(INIT_SIZE, pwrfl.length());
+#endif
+  
+  for (long i: range(pwrfl.length())) {
+    ZZ& z = pwrfl[i];
+    long u, v;
+
+    // What to add to z to make it divisible by p2e?
+    long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
+    if (zMod > p2e/2) { // need to add a positive number
+      zMod = p2e - zMod;
+      u = zMod/p2r;
+      if (u > aa) u = aa;
+    }
+    else {              // need to add a negative number
+      u = -(zMod/p2r);
+      if (u < -aa) u = -aa;
+      zMod = -zMod;
+    }
+    v = zMod - u*p2r;
+    z += u*p2r + to_ZZ(q)*v; // make z divisible by p2e
+
+    if (rem(z,p2e) != 0) { // sanity check
+      cerr << "**error: original z["<<i<<"]=" << (z-(u*p2r+to_ZZ(q)*v))
+	   << std::dec << ", p^r="<<p2r << ", p^e="<<p2e << endl;
+      cerr << "z' = z + "<<u<<"*p^r +"<<v<<"*q = "<<z<<endl;
+      exit(1);
+    }
+
+#ifdef DEBUG_PRINTOUT
+    uVec[i] = u;
+    vVec[i] = v;
+#endif
+  }
+
+  p2d_conv.powerfulToZZX(poly, pwrfl);
+
+#ifdef DEBUG_PRINTOUT
+  // FIXME: do something with uVec and vVec
+#endif
+  
+}
 
 #if 1
 static long makeDivisible(vec_ZZ& vec, long p2e, long p2r, long q, long a, 
@@ -273,6 +346,7 @@ RecryptData::~RecryptData()
  * from above, a sufficient condition for this is
  * 
  *    (1) (p^{e'}/2 + 2(p^r+1))(tau+1)*cM <= (q-1)/2  = p^e/2
+ *               ^ this bound is buggy...should be p^{e'}
  *
  * (This is Equation (9) in Appendix A of https://ia.cr/2014/873,
  * but note that the a here is a*p^r there.)
@@ -314,7 +388,6 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   // coeff_bound is ultimately a high prob bound on |w0+w1*s|,
   // the coeffs of w0, w1 are chosen uniformly on [-1/2,1/2]
 
-  double factor = coeff_bound * 2;
   cerr << "*** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
 
   long p = context.zMStar.getP();
@@ -322,17 +395,16 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long frstTerm = 2*(p2r+1);
   double logp = log(p);    // log p
 
-  // Start with the smallest e s.t. p^e > (2p^r+1)(skSize+1)*magicCons
+  // Start with the smallest e s.t. p^e/2 > 2(p^r+1)*coeff_bound
   ePrime = 0;
-  e = ceil( log(frstTerm*factor) /logp );
+  e = ceil( log(frstTerm*coeff_bound*2) /logp );
   //OLD: assert(e*logp < log(NTL_SP_BOUND));
   helib::assertTrue(e*logp < log(NTL_SP_BOUND), "p^e for this smallest e must be single precision");
   // p^e for this smallest e must be single precision
 
   // Loop to try and find better solutions, that still satisfy
-  //          (p^{e'}/2 + 2*p^r+1) * (s+1)*magicConst*2 <= p^e
-  //          <=> p^{e'}/2 + 2*p^r +1 <= p^e/factor
-  //          <=> p^{e'} <=  2*(p^e/factor - 2*p^r -1)
+  //          (p^{e'} + frstTerm) * coeff_bound <= p^e/2
+  //          <=> p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
   // stop when you hit p^e > 2^30
   long eTry = e;
   long eMinusEprime = e; // want to minimize e-e'
@@ -340,8 +412,8 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     double p2e = pow(p,eTry);
 
     // Solve for the largest e' satisfying constraints (1)
-    // p^{e'} <=  2*(p^e/factor - 2*p^r -1)
-    long ePrimeTry = floor( log(2*(p2e/factor -frstTerm)) / logp);
+    // p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
+    long ePrimeTry = floor( log(p2e/(2*coeff_bound)-frstTerm) / logp);
     if (eTry - ePrimeTry < eMinusEprime) {
       e = eTry;
       ePrime = ePrimeTry;
@@ -353,6 +425,8 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long pToEprimeOver2 = floor(pow(p,ePrime)/2.0);
   a = 2*pToEprimeOver2 /5; // empirically we want a little below a half
   a -= (a % p2r);
+
+#if 0
  
   if (default_target) {
     // Try to increase t, while maintaining constraint (1)
@@ -368,6 +442,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     double coeff_bound = (skSize+1) * magicConst;
     cerr << "****** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
   }
+#endif
 
 #ifdef DEBUG_PRINTOUT
   long b = pToEprimeOver2 - a;
@@ -1093,81 +1168,34 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
   //OLD: assert(zzParts.size() == 2);
   helib::assertEq(zzParts.size(), (std::size_t)2, "Exactly 2 parts required for mod-switching in thin bootstrapping");
 
+
 #ifdef DEBUG_PRINTOUT
   if (dbgKey) {
-    cerr << "  before makeDivisible (recryption modulus q="<<q
-         << "), noise_bnd=" << noise<<endl;
-    printSizesPowerful(zzParts, dbgKey->sKeys[recryptKeyID],
-                       ctxt.getContext().rcData, q, noise);
+    checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
+                       ctxt.getContext().rcData, q);
   }
 #endif
-
-#if 1
 
   // Add multiples of p2r and q to make the zzParts divisible by p^{e'}
-  double maxU_norm = 0;
-  long maxU=0;
-  for (long i=0; i<(long)zzParts.size(); i++) {
+  for (long i: range(zzParts.size())) {
     // make divisible by p^{e'}
-    double U_norm; 
 
-    long newMax = makeDivisible(zzParts[i].rep, p2ePrime, p2r, q,
-				trcData.a, U_norm, context.zMStar);
+    newMakeDivisible(zzParts[i], p2ePrime, p2r, q,
+				trcData.a, ctxt.getContext());
 
-    zzParts[i].normalize(); // normalize after working directly on the rep
-    if (maxU < newMax)  maxU = newMax;
-    if (maxU_norm < U_norm)  maxU_norm = U_norm;
   }
+
 #ifdef DEBUG_PRINTOUT
-  double newNoise = noise + maxU_norm*(skBounds[recryptKeyID]+1);
-  cerr << "  after makeDivisible, maxU=" << maxU
-       << ", maxU_norm="<<maxU_norm<<", p2r="<<p2r
-       << ", noise_bnd="<<newNoise<<", sk_bnd="<< skBounds[recryptKeyID]
-       << endl;
-   if (dbgKey)
-     printSizesPowerful(zzParts, dbgKey->sKeys[recryptKeyID],
-                        ctxt.getContext().rcData, q, newNoise);
-#endif
-
-  for (long i=0; i<(long)zzParts.size(); i++)
-    zzParts[i] /= p2ePrime;   // divide by p^{e'}
-
-#else
-  // Experimental version
-  // Add multiples of p2r and q to make the zzParts divisible by p^{e'}
-  double maxU_norm = 0;
-  long maxU=0;
-  for (long i=0; i<(long)zzParts.size(); i++) {
-    // make divisible by p^{e'}
-    double U_norm; 
-
-    Vec<ZZ> pwrfl;
-    trcData.p2dConv->ZZXtoPowerful(pwrfl, zzParts[i]);
-
-    long newMax = makeDivisible(pwrfl, p2ePrime, p2r, q,
-				trcData.a, U_norm, context.zMStar);
-
-    trcData.p2dConv->powerfulToZZX(zzParts[i], pwrfl);
-
-    zzParts[i].normalize(); // normalize after working directly on the rep
-    if (maxU < newMax)  maxU = newMax;
-    if (maxU_norm < U_norm)  maxU_norm = U_norm;
+  if (dbgKey) {
+    checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
+                       ctxt.getContext().rcData, q);
   }
-#ifdef DEBUG_PRINTOUT
-  double newNoise = noise + maxU_norm*(skBounds[recryptKeyID]+1);
-  cerr << "  after makeDivisible, maxU=" << maxU
-       << ", maxU_norm="<<maxU_norm<<", p2r="<<p2r
-       << ", noise_bnd="<<newNoise<<", sk_bnd="<< skBounds[recryptKeyID]
-       << endl;
-   if (dbgKey)
-     printSizesPowerful(zzParts, dbgKey->sKeys[recryptKeyID],
-                        ctxt.getContext().rcData, q, newNoise);
 #endif
 
-  for (long i=0; i<(long)zzParts.size(); i++)
+  for (long i: range(zzParts.size())) {
     zzParts[i] /= p2ePrime;   // divide by p^{e'}
+  }
 
-#endif
 
   // Multiply the post-processed cipehrtext by the encrypted sKey
 
@@ -1255,4 +1283,26 @@ printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   cerr << ", log2(noiseEst/q)=" << ratio;
 
   cerr << endl;
+}
+
+static void
+checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
+                   const RecryptData& rcData, long q)
+{
+  ZZX ptxt;
+  rawDecrypt(ptxt, zzParts, sKey); // no mod q
+
+  Vec<ZZ> powerful;
+  rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
+  xdouble max_pwrfl = conv<xdouble>(largestCoeff(powerful));
+  xdouble critical_value = (max_pwrfl/q)/q;
+
+  vecRed(powerful, powerful, q, false);
+  max_pwrfl = conv<xdouble>(largestCoeff(powerful));
+  critical_value += max_pwrfl/q;
+
+  cerr << "*** critical_value=" << critical_value;
+  if (critical_value > 0.5) cerr << " BAD-BOUND";
+
+  cerr << "\n";
 }

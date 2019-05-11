@@ -388,6 +388,7 @@ long FHEPubKey::Encrypt(Ctxt &ctxt, const ZZX& ptxt, long ptxtSpace,
     if (ptxtSpace <= 1) throw helib::RuntimeError("Plaintext-space mismatch on encryption");
   }
 
+
   // generate a random encryption of zero from the public encryption key
   ctxt = pubEncrKey; // already an encryption of zero, just not a random one
                      // ctxt with two parts, each with all the ctxtPrimes
@@ -479,6 +480,8 @@ long FHEPubKey::Encrypt(Ctxt &ctxt, const ZZX& ptxt, long ptxtSpace,
   ctxt.intFactor = 1;
 
   //cerr << "*** ctxt.noiseBound " << ctxt.noiseBound << "\n";
+
+  // CheckCtxt(ctxt, "after encryption");
 
   return ptxtSpace;
 }
@@ -997,14 +1000,19 @@ long FHESecKey::skEncrypt(Ctxt &ctxt, const ZZX& ptxt,
   ctxt.parts[0].skHandle.setOne();
   ctxt.parts[1].skHandle.setBase(skIdx);
 
+  // Victor says: I reverted the logic here back to an earlier version
+  // ac0308715e5ae6bf5e750e8701e736d855550fc8 
+  // I don't see the reason for the change, and the logic here is
+  // very delicate
+
   const DoubleCRT& sKey = sKeys.at(skIdx);   // get key
   // Sample a new RLWE instance
-  double noiseBound = RLWE(ctxt.parts[0], ctxt.parts[1], sKey, ptxtSpace);
+  ctxt.noiseBound = RLWE(ctxt.parts[0], ctxt.parts[1], sKey, ptxtSpace);
 
   if (isCKKS()) {
     double f = getContext().ea->getCx().encodeScalingFactor() / ptxtSize;
     long prec = getContext().alMod.getPPowR();
-    long ef = conv<long>(ceil(prec*noiseBound/(f*ptxtSize)));
+    long ef = conv<long>(ceil(prec*ctxt.noiseBound/(f*ptxtSize)));
     if (ef>1) { // scale up some more
       ctxt.parts[0] += ptxt * ef;
       f *= ef;
@@ -1015,14 +1023,11 @@ long FHESecKey::skEncrypt(Ctxt &ctxt, const ZZX& ptxt,
     // Round size to next power of two so as not to leak too much
     ctxt.ptxtMag = EncryptedArrayCx::roundedSize(ptxtSize);
     ctxt.ratFactor = f;
-    ctxt.noiseBound = noiseBound;
+    ctxt.noiseBound  += ptxtSize * ctxt.ratFactor;
     return long(f);
   }
   else { // BGV
     ctxt.addConstant(ptxt);  // add in the plaintext
-    double ptxt_bound = context.noiseBoundForUniform(double(ptxtSpace)/2.0, context.zMStar.getPhiM());
-
-    ctxt.noiseBound = noiseBound + ptxt_bound;
     return ctxt.ptxtSpace;
   }
 }

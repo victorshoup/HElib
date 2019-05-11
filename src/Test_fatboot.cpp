@@ -84,7 +84,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
 
   context.zMStar.set_cM(c_m/100.0);
-  buildModChain(context, L, c, /*willBeBootstrappable=*/true);
+  buildModChain(context, L, c, /*willBeBootstrappable=*/true, /*t=*/skHwt);
 
   if (!noPrint) {
     std::cout << "security=" << context.securityLevel()<<endl;

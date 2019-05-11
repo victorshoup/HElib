@@ -35,6 +35,16 @@ double realToEstimatedNoise(const Ctxt& ctxt, const FHESecKey& sk)
   return conv<double>(actualNoise/noiseEst);
 }
 
+double log2_realToEstimatedNoise(const Ctxt& ctxt, const FHESecKey& sk)
+{
+  xdouble noiseEst = ctxt.getNoiseBound();
+  if (ctxt.isCKKS())
+    noiseEst += ctxt.getRatFactor() * ctxt.getPtxtMag();
+  xdouble actualNoise = embeddingLargestCoeff(ctxt, sk);
+
+  return log(actualNoise/noiseEst)/log(2.0);
+}
+
 // check that real-to-estimated ratio is not too large, print warning otherwise
 void checkNoise(const Ctxt& ctxt, const FHESecKey& sk, const std::string& msg, double thresh)
 {
@@ -155,7 +165,7 @@ void CheckCtxt(const Ctxt& c, const char* label)
        << ", p^r=" << c.getPtxtSpace();
 
   if (dbgKey) {
-    double ratio = realToEstimatedNoise(c, *dbgKey);
+    double ratio = log2_realToEstimatedNoise(c, *dbgKey);
     cerr << ", log2(noise/bound)=" << ratio;
     if (ratio > 0) cerr << " BAD-BOUND";
   }

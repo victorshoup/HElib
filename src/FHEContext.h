@@ -396,12 +396,17 @@ void readContextBinary(std::istream& str, FHEcontext& context);
 
 // Build modulus chain with nBits worth of ctxt primes, 
 // using nDgts digits in key-switching.
-// willBeBootstrappable flag is a hack, used to get around some
-// circularity when making the context boostrappable.
+// The willBeBootstrappable and skHwt parameters are needed to get around some
+// some circularity when making the context boostrappable.
+// If you later call context.makeBootstrappable with a given value
+// of skHwt, you should first buildModChain with willBeBootstrappable
+// set to true and the given value of skHwt.
+// FIXME: We should really have a simpler way to do this.
 // resolution ... FIXME
 
 void buildModChain(FHEcontext& context, long nBits, long nDgts=3,
-                      bool willBeBootstrappable=false, long resolution=3);
+                      bool willBeBootstrappable=false, long skHwt=0, 
+                      long resolution=3);
 
 ///@}
 extern FHEcontext* activeContext; // Should point to the "current" context
