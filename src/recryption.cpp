@@ -380,11 +380,10 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     default_target=true;
   }
 
-  double skSize = sampleHWtBoundedEffectiveBound(context, targetWeight);
-
-
   double magicConst = context.zMStar.get_cM();
-  double coeff_bound = (skSize+1) * magicConst;
+
+  double coeff_bound = 
+    0.5 + context.boundForSecretKeyMul(targetWeight) * magicConst;
   // coeff_bound is ultimately a high prob bound on |w0+w1*s|,
   // the coeffs of w0, w1 are chosen uniformly on [-1/2,1/2]
 
@@ -448,7 +447,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long b = pToEprimeOver2 - a;
   cerr << "RecryptData::setAE(): e="<<e<<", e'="<<ePrime
        << ", a="<<a<<", b="<<b<<", sk-hwt="<<targetWeight
-       << " (size="<<skSize<<"), magicConst="<<magicConst<<endl;
+       << endl;
 #endif
   return targetWeight;
 }

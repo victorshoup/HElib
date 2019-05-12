@@ -172,6 +172,10 @@ PAlgebra::PAlgebra(long mm, long pp,
 
   phiM = ordP * getNSlots();
 
+  Vec<Pair<long,long>> factors;
+  factorize(factors, mm);
+  nfactors = factors.length(); 
+
   // Allocate space for the various arrays
   resize(T,getNSlots());
   Tidx.assign(mm,-1);    // allocate m slots, initialize them to -1

@@ -171,6 +171,30 @@ public:
   // NOTE: degBound is not used here, but I include it
   // for consistency with the other noiseBound routines
 
+  //=======================================
+
+  //! This computes a high probability bound on the L-infty norm
+  //! of s*x in the pwrfl basis, assuming x is chosen with coeffs
+  //! in the pwrfl basis uniformly and independently dist'd over [-1/2,1/2],
+  //! and assuming s is chosen with skHwt nonzero coeffs mod X^m-1
+  //! in the power basis (uniformly and independently over {-1,1}).
+  //! The bound should be satisfied with probability epsilon.
+
+  //! NOTE: this is a bit heuristic. See design document for details.
+  //! For a more conservative bound, multiply by 2^{k/2}, where
+  //! k = # of prime factors of m.
+
+  double boundForSecretKeyMul(long skHwt = 0) const 
+  {
+    long k = zMStar.getNFactors(); 
+    // number of prime factors of m
+
+    if (!skHwt) skHwt = rcData.skHwt; 
+    // the default reverts to rcData.skHwt, *not* rcData.defSkHwt
+
+    return noiseBoundForUniform(0.5, skHwt*(1L << k));
+  }
+
   double noiseBoundForHWt(long hwt, long degBound) const
   {
     return scale * std::sqrt(double(hwt));
