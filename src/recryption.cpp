@@ -39,6 +39,10 @@ static void
 checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
                    const RecryptData& rcData, long q);
 
+static void
+checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
+                   const FHEcontext& context, long q);
+
 // Return in poly a polynomial with X^i encoded in all the slots
 static void x2iInSlots(ZZX& poly, long i,
 		       vector<ZZX>& xVec, const EncryptedArray& ea)
@@ -1170,6 +1174,8 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
 
 #ifdef DEBUG_PRINTOUT
   if (dbgKey) {
+    checkRecryptBounds(zzParts, dbgKey->sKeys[recryptKeyID],
+                       ctxt.getContext(), q);
     checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
                        ctxt.getContext().rcData, q);
   }
@@ -1302,6 +1308,38 @@ checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
 
   cerr << "*** critical_value=" << critical_value;
   if (critical_value > 0.5) cerr << " BAD-BOUND";
+
+  cerr << "\n";
+}
+
+static void
+checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
+                   const FHEcontext& context, long q)
+{
+  const RecryptData& rcData = context.rcData;
+
+  double magicConst = context.zMStar.get_cM();
+  double coeff_bound = 
+    0.5 + context.boundForSecretKeyMul() * magicConst;
+  double p2r = context.alMod.getPPowR();
+
+  ZZX ptxt;
+  rawDecrypt(ptxt, zzParts, sKey); // no mod q
+
+  Vec<ZZ> powerful;
+  rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
+  double max_pwrfl = conv<double>(largestCoeff(powerful));
+  double ratio = max_pwrfl/(q*coeff_bound);
+
+  cerr << "*** |x|/bound=" << ratio;
+  if (ratio > 1.0) cerr << " BAD-BOUND";
+
+  vecRed(powerful, powerful, q, false);
+  max_pwrfl = conv<double>(largestCoeff(powerful));
+  ratio = max_pwrfl/(2*p2r*coeff_bound);
+
+  cerr << ", (|x%q|)/bound=" << ratio;
+  if (ratio > 1.0) cerr << " BAD-BOUND";
 
   cerr << "\n";
 }
