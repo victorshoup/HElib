@@ -50,7 +50,13 @@ double largestCoeff(const std::vector<T>& f)
   }
   return mx;
 }
+
+
 NTL::ZZ largestCoeff(const NTL::ZZX& f);
+
+NTL::ZZ largestCoeff(const NTL::Vec<NTL::ZZ>& f);
+// somebody eliminated this...please leave it here!
+
 NTL::ZZ largestCoeff(const DoubleCRT& f);
 
 //! The L2-norm of an element (in coefficient representation)

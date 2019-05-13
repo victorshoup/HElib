@@ -48,6 +48,16 @@ ZZ largestCoeff(const ZZX& f)
   return mx;
 }
 
+ZZ largestCoeff(const Vec<ZZ>& f)
+{
+  ZZ mx = ZZ::zero();
+  for (auto& x : f) {
+    if (mx < abs(x))
+      mx = abs(x);
+  }
+  return mx;
+}
+
 ZZ largestCoeff(const DoubleCRT& f)
 {
   NTL::ZZX poly;

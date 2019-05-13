@@ -71,6 +71,12 @@ static void x2iInSlots(ZZX& poly, long i,
 static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a, 
                           const FHEcontext& context, ZZX& upoly, ZZX& vpoly)
 {
+  if (p2e == 1) {
+    upoly = 0;
+    vpoly = 0;
+    return;
+  }
+
   //OLD: assert(q>0 && p2e>0 && p2r>0 && a>=0 && q % p2e == 1 && a % p2r == 0 && a*2 < p2e);
   helib::assertTrue<helib::InvalidArgument>(q > 0l, "q must be positive");
   helib::assertTrue<helib::InvalidArgument>(p2e > 0l, "p2e must be positive");
@@ -81,6 +87,7 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
   helib::assertEq<helib::InvalidArgument>(a % p2r, 0l, "p2r must divide a");
 
   helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
+
 
 
   const RecryptData& rcData = context.rcData;
@@ -403,12 +410,13 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
+  long r = context.alMod.getR();
   long frstTerm = 2*p2r+3;
   double logp = log(p);    // log p
 
-  // Start with the smallest e s.t. p^e/2 > 2(p^r+1)*coeff_bound
+  // Start with the smallest e s.t. p^e/2 >= (2*p^r+4)*coeff_bound
   ePrime = 0;
-  e = ceil( log(frstTerm*coeff_bound*2) /logp );
+  e = ceil( log((frstTerm+1)*coeff_bound*2) /logp );
   //OLD: assert(e*logp < log(NTL_SP_BOUND));
   helib::assertTrue(e*logp < log(NTL_SP_BOUND), "p^e for this smallest e must be single precision");
   // p^e for this smallest e must be single precision
@@ -425,7 +433,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     // Solve for the largest e' satisfying constraints (1)
     // p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
     long ePrimeTry = floor( log(p2e/(2*coeff_bound)-frstTerm) / logp);
-    if (eTry - ePrimeTry < eMinusEprime) {
+    if (eTry - ePrimeTry < eMinusEprime && ePrimeTry > r) {
       e = eTry;
       ePrime = ePrimeTry;
       eMinusEprime = e - ePrime;
@@ -434,8 +442,16 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   // Split p^{e'}/2 into a+b with a divisible by p^r
   long pToEprimeOver2 = floor(pow(p,ePrime)/2.0);
-  a = 2*pToEprimeOver2 /5; // empirically we want a little below a half
-  a -= (a % p2r);
+  //a = 2*pToEprimeOver2 /5; // empirically we want a little below a half
+  //a = 3*pToEprimeOver2 /5; // empirically we want a above 1/2
+
+  // make a as large as possible
+  a = pToEprimeOver2 - p2r;
+
+  if (a < 0) 
+    a = 0;
+  else
+    a -= (a % p2r);
 
 #if 0
  
@@ -1393,7 +1409,7 @@ checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
     if (max_pwrfl == 0)
       ratio = 0;
     else
-      ratio = 1;
+      ratio = 999;
   }
   else {
     ratio = max_pwrfl/denom;
@@ -1438,7 +1454,18 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
   Vec<ZZ> powerful;
   rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
   double max_pwrfl = conv<double>(largestCoeff(powerful));
-  double ratio = max_pwrfl/((2*b)*coeff_bound);
+
+  double ratio;
+  double denom = (2*b)*coeff_bound;
+  if (denom == 0) {
+    if (max_pwrfl == 0)
+      ratio = 0;
+    else
+      ratio = 999;
+  }
+  else {
+    ratio = max_pwrfl/denom;
+  }
 
   cerr << "=== |v|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
