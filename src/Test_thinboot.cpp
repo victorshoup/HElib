@@ -23,7 +23,7 @@ static bool debug = 0;   // a debug flag
 static int scale = 0;
 
 
-#define OUTER_REP (1)
+static long OUTER_REP = 1;
 
 
 static Vec<long> global_mvec, global_gens, global_ords;
@@ -103,6 +103,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   long p2r = context.alMod.getPPowR();
 
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
+  cerr << "*********** iter=" << (numkey+1) << "\n";
 
   t = -GetTime();
   if (!noPrint) cout << "Generating keys, " << std::flush;
@@ -217,6 +218,7 @@ int main(int argc, char *argv[])
   amap.arg("mvec", global_mvec);
   amap.arg("c_m", c_m);
 
+  amap.arg("iter", OUTER_REP);
 
   amap.parse(argc, argv);
 
