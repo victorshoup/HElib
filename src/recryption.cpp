@@ -342,15 +342,14 @@ RecryptData::~RecryptData()
  *     x' = c0'+c1'*s = x+p^r(u0+u1*s)+(v0+v1*s),
  * where |u0|,|u1|<a and |v0|,|v1|<b. It follows from the above that
  * 
- *   |x'|/q  < (2+b)(1+tau)*cM, and
- *   |[x']_q|< p^r(2+a)(1+tau)*cM
+ *   |x'|/q  < (3+2*b)(1+tau)*cM, and
+ *   |[x']_q|< p^r(2+2*a)(1+tau)*cM
  * 
  * To be able to use the Lemma 5.1 from https://ia.cr/2014/873, we
  * need to have |x'|/q + |[x']_q| <= (q-1)/2 = p^e/2. Using the bounds
  * from above, a sufficient condition for this is
  * 
- *    (1) (p^{e'}/2 + 2(p^r+1))(tau+1)*cM <= (q-1)/2  = p^e/2
- *               ^ this bound is buggy...should be p^{e'}
+ *    (1) (p^{e'} + 2*p^r+3))(tau+1)*cM <= (q-1)/2  = p^e/2
  *
  * (This is Equation (9) in Appendix A of https://ia.cr/2014/873,
  * but note that the a here is a*p^r there.)
@@ -395,7 +394,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
-  long frstTerm = 2*(p2r+1);
+  long frstTerm = 2*p2r+3;
   double logp = log(p);    // log p
 
   // Start with the smallest e s.t. p^e/2 > 2(p^r+1)*coeff_bound
