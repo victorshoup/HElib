@@ -102,6 +102,9 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   long p2r = context.alMod.getPPowR();
 
+  if (debug && OUTER_REP > 1)
+    fhe_stats = true;
+
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
   cerr << "*********** iter=" << (numkey+1) << "\n";
 
@@ -166,6 +169,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   else
     cout << "BAD\n";
   }
+
+  if (fhe_stats) fhe_stats_print(OUTER_REP, context);
 }
 
 

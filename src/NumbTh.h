@@ -387,6 +387,7 @@ inline void PolyRed(NTL::ZZX& F, long q, bool abs=false) { PolyRed(F,F,q,abs); }
 inline void PolyRed(NTL::ZZX& F, const NTL::ZZ& q, bool abs=false)
 { PolyRed(F,F,q,abs); }
 void vecRed(NTL::Vec<NTL::ZZ>& out, const NTL::Vec<NTL::ZZ>& in, long q, bool abs);
+void vecRed(NTL::Vec<NTL::ZZ>& out, const NTL::Vec<NTL::ZZ>& in, const NTL::ZZ& q, bool abs);
 ///@}
 
 //! Multiply the polynomial f by the integer a modulo q

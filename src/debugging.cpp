@@ -183,9 +183,16 @@ void CheckCtxt(const Ctxt& c, const char* label)
     Vec<ZZ> powerful;
     rcData.p2dConv->ZZXtoPowerful(powerful, pp);
 
+    ZZ q;
+    q = context.productOfPrimes(c1.getPrimeSet());
+    vecRed(powerful, powerful, q, false);
+
+    ZZX pp_alt;
+    rcData.p2dConv->powerfulToZZX(pp_alt, powerful);
+
     xdouble max_coeff = conv<xdouble>(largestCoeff(pp));
     xdouble max_pwrfl = conv<xdouble>(largestCoeff(powerful));
-    xdouble max_canon = embeddingLargestCoeff(pp, palg);
+    xdouble max_canon = embeddingLargestCoeff(pp_alt, palg);
     double ratio = log(max_pwrfl/max_canon)/log(2.0);
 
     //cerr << ", max_coeff=" << max_coeff;

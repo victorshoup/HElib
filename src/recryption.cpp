@@ -390,6 +390,65 @@ RecryptData::~RecryptData()
  * NOTE: setAE returns the Hamming weight, *not* the norm tau. The norm
  * can be computed from the weight using sampleHWtBoundedEffectiveBound.
  **/
+
+// the routine compute_fudge is used to correct for the fact that
+// the u-coeffs or v-coeffs are not quite uniform
+
+// The basic idea is this:
+// Suppose we have a random variable X.
+// Suppose that condition on an event that happens with probability
+// 1-eps, the conditional expectation of X^2 is bounded by (A^2)/3
+// and that with probability eps, the conditional expectation of X^2 is A^2.
+// Then the expectation of X^2 is at most 
+//    (A^2)/3*(1-eps) + A^2*eps = (A^2)/3*(1-eps+3*eps) = (A^2)/3*(1+2*eps)
+// The square root of this is 
+//    A/sqrt(3)*sqrt(1+2*eps) <= A/sqrt(3)*(1+eps),
+// using the general inquality sqrt(1+2*eps) <= (1+eps)
+
+// This inequality lets us correct for defects in the distribution
+// of the u-coeffs and v-coeffs
+
+
+static 
+double compute_fudge(const FHEcontext& context , long p2ePrime)
+{
+  double eps = 0;
+
+  if (p2ePrime > 1) {
+    long p = context.zMStar.getP();
+    long p2r = context.alMod.getPPowR();
+
+
+    // make a as large as possible
+    long a = p2ePrime/2 - p2r;
+
+    if (a < 0) 
+      a = 0;
+    else
+      a -= (a % p2r);
+
+    long b = p2ePrime/2 - a;
+
+    if (b == p2ePrime/2) {
+      // corner case: in this case a == 0
+      // corrects for a slight defect for powers of 2 for v-coeffs
+      if (p == 2) eps = 1/double(p2ePrime);
+
+    }
+    else {
+      // corrects for defect in  v-coeffs (as well as u-coeffs)
+
+      if (p == 2)
+         eps = (2*b+1)/double(p2ePrime);
+      else
+         eps = (2*b+2)/double(p2ePrime);
+
+    }
+  }
+
+  return 1 + eps;
+}
+
 long RecryptData::setAE(long& a, long& e, long& ePrime,
                     const FHEcontext& context, long targetWeight)
 {
@@ -399,14 +458,11 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     default_target=true;
   }
 
-  double magicConst = context.zMStar.get_cM();
-
-  double coeff_bound = 
-    0.5 + context.boundForSecretKeyMul(targetWeight) * magicConst;
+  double coeff_bound = context.boundForRecryption(targetWeight);
   // coeff_bound is ultimately a high prob bound on |w0+w1*s|,
   // the coeffs of w0, w1 are chosen uniformly on [-1/2,1/2]
 
-  cerr << "*** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
+  //cerr << "*** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
 
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
@@ -418,7 +474,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   ePrime = 0;
   e = ceil( log((frstTerm+1)*coeff_bound*2) /logp );
   //OLD: assert(e*logp < log(NTL_SP_BOUND));
-  helib::assertTrue(e*logp < log(NTL_SP_BOUND), "p^e for this smallest e must be single precision");
+  helib::assertTrue(e*logp < log(1L << 30), "p^e for this smallest e must be single precision");
   // p^e for this smallest e must be single precision
 
   // Loop to try and find better solutions, that still satisfy
@@ -428,51 +484,47 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long eTry = e;
   long eMinusEprime = e; // want to minimize e-e'
   do {
-    double p2e = pow(p,eTry);
+    long p2e = power_long(p, eTry);
 
     // Solve for the largest e' satisfying constraints (1)
     // p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
     long ePrimeTry = floor( log(p2e/(2*coeff_bound)-frstTerm) / logp);
-    if (eTry - ePrimeTry < eMinusEprime && ePrimeTry > r) {
+
+    for (; ePrimeTry > r; ePrimeTry--) {
+      long p2ePrimeTry = power_long(p, ePrimeTry);
+      double fudge = compute_fudge(context, p2ePrimeTry);
+#if 0
+      cerr << "****** fudge=" << fudge 
+	   << " e=" << eTry
+	   << " ePrimeTry=" << ePrimeTry 
+	   << "\n";
+#endif
+      if ((p2ePrimeTry + frstTerm)*coeff_bound*fudge*2 <= p2e) break;
+    }
+
+    if (ePrimeTry > r && eTry - ePrimeTry < eMinusEprime) {
       e = eTry;
       ePrime = ePrimeTry;
       eMinusEprime = e - ePrime;
     }
-  } while ((++eTry)*log(p) <= log(1L<<30));  
+  } while ((++eTry)*logp <= log(1L<<30));  
 
   // Split p^{e'}/2 into a+b with a divisible by p^r
-  long pToEprimeOver2 = floor(pow(p,ePrime)/2.0);
-  //a = 2*pToEprimeOver2 /5; // empirically we want a little below a half
-  //a = 3*pToEprimeOver2 /5; // empirically we want a above 1/2
+  long p2ePrime = power_long(p,ePrime);
 
   // make a as large as possible
-  a = pToEprimeOver2 - p2r;
+  // NOTE: the compute_fudge routine assumes this is how a is
+  // chosen, so don't change this.  Making a as large as possible
+  // makes the u-coeffs as close to uniform as possible
+  a = p2ePrime/2 - p2r;
 
   if (a < 0) 
     a = 0;
   else
     a -= (a % p2r);
 
-#if 0
- 
-  if (default_target) {
-    // Try to increase t, while maintaining constraint (1)
-    double bound = (frstTerm + pToEprimeOver2)*magicConst * 2;
-    long p2e = pow(p,e);
-    while (targetWeight++) {
-      skSize = sampleHWtBoundedEffectiveBound(context, targetWeight);
-      if (targetWeight>256 || bound*(skSize+1) >= p2e)
-	break;
-
-    }
-    targetWeight--;
-    double coeff_bound = (skSize+1) * magicConst;
-    cerr << "****** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
-  }
-#endif
-
 #ifdef DEBUG_PRINTOUT
-  long b = pToEprimeOver2 - a;
+  long b = p2ePrime/2 - a;
   cerr << "RecryptData::setAE(): e="<<e<<", e'="<<ePrime
        << ", a="<<a<<", b="<<b<<", sk-hwt="<<targetWeight
        << endl;
@@ -1147,12 +1199,14 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
 
   ctxt.dropSmallAndSpecialPrimes();
 
+//#define DROP_BEFORE_THIN_RECRYPT
+#define THIN_RECRYPT_NLEVELS (2)
 #ifdef DROP_BEFORE_THIN_RECRYPT
   // experimental code...we should drop down to a reasonably low level
   // before doing the first linear map.
   long first = context.ctxtPrimes.first();
   long last = min(context.ctxtPrimes.last(),
-                  first + thinRecrypt_initial_level - 1);
+                  first + THIN_RECRYPT_NLEVELS - 1);
   ctxt.bringToSet(IndexSet(first, last));
 #endif
 
@@ -1200,8 +1254,6 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
   if (dbgKey) {
     checkRecryptBounds(zzParts, dbgKey->sKeys[recryptKeyID],
                        ctxt.getContext(), q);
-    checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
-                       ctxt.getContext().rcData, q);
   }
 #endif
 
@@ -1323,6 +1375,16 @@ printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   cerr << endl;
 }
 
+
+bool fhe_stats=false;
+double fhe_stats_x_sum=0, fhe_stats_x_max=0;
+double fhe_stats_xmod_sum=0, fhe_stats_xmod_max=0;
+double fhe_stats_u_sum=0, fhe_stats_u_max=0;
+double fhe_stats_v_sum=0, fhe_stats_v_max=0;
+double fhe_stats_cv_sum=0, fhe_stats_cv_max=0;
+
+
+
 static void
 checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
                    const RecryptData& rcData, long q)
@@ -1333,11 +1395,16 @@ checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   Vec<ZZ> powerful;
   rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
   xdouble max_pwrfl = conv<xdouble>(largestCoeff(powerful));
-  xdouble critical_value = (max_pwrfl/q)/q;
+  double critical_value = conv<double>((max_pwrfl/q)/q);
 
   vecRed(powerful, powerful, q, false);
   max_pwrfl = conv<xdouble>(largestCoeff(powerful));
-  critical_value += max_pwrfl/q;
+  critical_value += conv<double>(max_pwrfl/q);
+
+  if (fhe_stats) {
+    fhe_stats_cv_sum += critical_value;
+    if (critical_value > fhe_stats_cv_max) fhe_stats_cv_max = critical_value; 
+  }
 
   cerr << "=== critical_value=" << critical_value;
   if (critical_value > 0.5) cerr << " BAD-BOUND";
@@ -1350,11 +1417,8 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
                    const FHEcontext& context, long q)
 {
   const RecryptData& rcData = context.rcData;
-
-  double magicConst = context.zMStar.get_cM();
-  double coeff_bound = 
-    0.5 + context.boundForSecretKeyMul() * magicConst;
-  double p2r = context.alMod.getPPowR();
+  double coeff_bound = context.boundForRecryption();
+  long p2r = context.alMod.getPPowR();
 
   ZZX ptxt;
   rawDecrypt(ptxt, zzParts, sKey); // no mod q
@@ -1364,12 +1428,22 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   double max_pwrfl = conv<double>(largestCoeff(powerful));
   double ratio = max_pwrfl/(q*coeff_bound);
 
+  if (fhe_stats) {
+    fhe_stats_x_sum += ratio;
+    if (ratio > fhe_stats_x_max) fhe_stats_x_max = ratio;
+  }
+
   cerr << "=== |x|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
 
   vecRed(powerful, powerful, q, false);
   max_pwrfl = conv<double>(largestCoeff(powerful));
   ratio = max_pwrfl/(2*p2r*coeff_bound);
+
+  if (fhe_stats) {
+    fhe_stats_xmod_sum += ratio;
+    if (ratio > fhe_stats_xmod_max) fhe_stats_xmod_max = ratio;
+  }
 
   cerr << ", (|x%q|)/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1384,9 +1458,7 @@ checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
 {
   const RecryptData& rcData = context.rcData;
 
-  double magicConst = context.zMStar.get_cM();
-  double coeff_bound = 
-    0.5 + context.boundForSecretKeyMul() * magicConst;
+  double coeff_bound = context.boundForRecryption();
 
   long p2r = context.alMod.getPPowR();
   long a = rcData.a;
@@ -1415,6 +1487,10 @@ checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
     ratio = max_pwrfl/denom;
   }
 
+  if (fhe_stats) {
+    fhe_stats_u_sum += ratio;
+    if (ratio > fhe_stats_u_max) fhe_stats_u_max = ratio;
+  }
 
   cerr << "=== |u|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1436,9 +1512,7 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
 {
   const RecryptData& rcData = context.rcData;
 
-  double magicConst = context.zMStar.get_cM();
-  double coeff_bound = 
-    0.5 + context.boundForSecretKeyMul() * magicConst;
+  double coeff_bound = context.boundForRecryption();
 
   long p2r = context.alMod.getPPowR();
   long a = rcData.a;
@@ -1467,6 +1541,11 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
     ratio = max_pwrfl/denom;
   }
 
+  if (fhe_stats) {
+    fhe_stats_v_sum += ratio;
+    if (ratio > fhe_stats_v_max) fhe_stats_v_max = ratio;
+  }
+
   cerr << "=== |v|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
 
@@ -1479,4 +1558,29 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
 
 
   cerr << "\n";
+}
+
+
+void fhe_stats_print(long iter, const FHEcontext& context)
+{
+   long phim = context.zMStar.getPhiM();
+
+   cerr << "||||| recryption stats ||||\n";
+   cerr << "**** averages ****\n";
+   cerr << "=== critical_value=" << (fhe_stats_cv_sum/iter) << "\n";
+   cerr << "=== |x|/bound=" << (fhe_stats_x_sum/iter) << "\n";
+   cerr << "=== |x%q|/bound=" << (fhe_stats_xmod_sum/iter) << "\n";
+   cerr << "=== |u|/bound=" << (fhe_stats_u_sum/iter) << "\n";
+   cerr << "=== |v|/bound=" << (fhe_stats_v_sum/iter) << "\n";
+   cerr << "**** maxima ****\n";
+   cerr << "=== critical_value=" << (fhe_stats_cv_max) << "\n";
+   cerr << "=== |x|/bound=" << (fhe_stats_x_max) << "\n";
+   cerr << "=== |x%q|/bound=" << (fhe_stats_xmod_max) << "\n";
+   cerr << "=== |u|/bound=" << (fhe_stats_u_max) << "\n";
+   cerr << "=== |v|/bound=" << (fhe_stats_v_max) << "\n";
+   cerr << "**** theoretical bounds ***\n";
+   cerr << "=== single-max=" << (sqrt(2.0*log(phim))/context.scale) << "\n";
+   cerr << "=== global-max=" << (sqrt(2.0*(log(iter)+log(phim)))/context.scale) << "\n";
+
+
 }

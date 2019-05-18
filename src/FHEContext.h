@@ -174,7 +174,7 @@ public:
   //=======================================
 
   //! This computes a high probability bound on the L-infty norm
-  //! of s*x in the pwrfl basis, assuming x is chosen with coeffs
+  //! of x0+s*x1 in the pwrfl basis, assuming x0 and x1 are chosen with coeffs
   //! in the pwrfl basis uniformly and independently dist'd over [-1/2,1/2],
   //! and assuming s is chosen with skHwt nonzero coeffs mod X^m-1
   //! in the power basis (uniformly and independently over {-1,1}).
@@ -184,7 +184,7 @@ public:
   //! For a more conservative bound, multiply by 2^{k/2}, where
   //! k = # of prime factors of m.
 
-  double boundForSecretKeyMul(long skHwt = 0) const 
+  double boundForRecryption(long skHwt = 0) const 
   {
     long k = zMStar.getNFactors(); 
     // number of prime factors of m
@@ -192,7 +192,10 @@ public:
     if (!skHwt) skHwt = rcData.skHwt; 
     // the default reverts to rcData.skHwt, *not* rcData.defSkHwt
 
-    return noiseBoundForUniform(0.5, skHwt*(1L << k));
+    double c_m = zMStar.get_cM();
+    // multiply by this fudge factor
+
+    return c_m * noiseBoundForUniform(0.5, skHwt*(1L << k) + 1);
   }
 
   double noiseBoundForHWt(long hwt, long degBound) const
