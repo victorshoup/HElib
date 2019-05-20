@@ -339,79 +339,15 @@ RecryptData::~RecryptData()
  * Assume that we already chosen a, e, e' and t (which induces the
  * secret-key size tau).
  * 
- * Going into the recryption procedure after "raw mod-switching", we
- * have a ciphertext (c0,c1) where the ci's are "random modulo q" in
- * their powerful basis. Denoting x = c0+c1*s (without mod-q reduction),
- * then |x|< |c0|+|c1*s|< q + B*||c1*s||, where |X| is powerful-basis
- * norm, ||X|| is canonical embedding norm, and B is some bound on the
- * ratio between the two.
- * 
- * Let tau be our bound on the secret key canonical-mebedding norm,
- * and we think of c1 as having random coefficients in [+-q/2] (say in
- * the powerful basis). Then ||c1|| < A*q whp (for some other bound A),
- * and therefore ||c1*s||< A*q*tau. Hence we get |x| < q*(1+B*A*tau).
- * The quantity A*B for this ring is recorded as cM in the PAlgebra,
- * so we have |x|/q < 1 + cM*tau < (1+tau)*cM.
+ * Based in this analysis, we need
+ *    (1) (f*p^{e'} + 2*p^r+2))*B <= p^e/2
+ * where B is a certain high-probability bound and f is a certain
+ * fudge factor.
  *
- * We also assume that the "noise term" after mod-q reduction is bounded
- * by |[x]_q| < 2*p^r*(1+tau)*cM (this expression is twice the added
- * noise term from mod-switching).
- * 
- * After makeDivisible relative to e' and a (with a divisible by p^r),
- * and b = p^e'/2 -a, we have a ciphertext (c0',c1') s.t.
- *     x' = c0'+c1'*s = x+p^r(u0+u1*s)+(v0+v1*s),
- * where |u0|,|u1|<a and |v0|,|v1|<b. It follows from the above that
- * 
- *   |x'|/q  < (3+2*b)(1+tau)*cM, and
- *   |[x']_q|< p^r(2+2*a)(1+tau)*cM
- * 
- * To be able to use the Lemma 5.1 from https://ia.cr/2014/873, we
- * need to have |x'|/q + |[x']_q| <= (q-1)/2 = p^e/2. Using the bounds
- * from above, a sufficient condition for this is
- * 
- *    (1) (p^{e'} + 2*p^r+3))(tau+1)*cM <= (q-1)/2  = p^e/2
- *
- * (This is Equation (9) in Appendix A of https://ia.cr/2014/873,
- * but note that the a here is a*p^r there.)
- * 
- * Note that as we let e,e' tend to infinity the constraint above
- * degenerates to (tau+1)*cM < p^{e-e'}, so the smallest value
- * of e-e' that we can hope for is
- *
- *    (2) e-e' = 1 + floor( log_p( (tau+1)*cM) )
- *
- * The setAE procedure tries to minimize e-e' subject to (1), and
- * in addition subject to the constraint that e is "not too big".
- * Specifically, it tries to ensure p^e<2^{30}, and failing that it
- * uses the smallest e for which 2(p^r+1)(tau+1)*cM*2 <= p^e, and the
- * largest e' for that value of e.
- *
- * Once e,e' are set, it splits p^{e'}/2=a+b with a,b about equal and
- * a divisible by p^r. Then it computes and returns the largest Hamming
- * weight for the key (that implies the norm tau) for which constraint
- * (1) still holds.
- *
- * NOTE: setAE returns the Hamming weight, *not* the norm tau. The norm
- * can be computed from the weight using sampleHWtBoundedEffectiveBound.
  **/
 
 // the routine compute_fudge is used to correct for the fact that
-// the u-coeffs or v-coeffs are not quite uniform
-
-// The basic idea is this:
-// Suppose we have a random variable X.
-// Suppose that condition on an event that happens with probability
-// 1-eps, the conditional expectation of X^2 is bounded by (A^2)/3
-// and that with probability eps, the conditional expectation of X^2 is A^2.
-// Then the expectation of X^2 is at most 
-//    (A^2)/3*(1-eps) + A^2*eps = (A^2)/3*(1-eps+3*eps) = (A^2)/3*(1+2*eps)
-// The square root of this is 
-//    A/sqrt(3)*sqrt(1+2*eps) <= A/sqrt(3)*(1+eps),
-// using the general inquality sqrt(1+2*eps) <= (1+eps)
-
-// This inequality lets us correct for defects in the distribution
-// of the u-coeffs and v-coeffs
-
+// the v-coeffs are not quite uniform
 
 static 
 double compute_fudge(const FHEcontext& context , long p2ePrime)
@@ -423,18 +359,6 @@ double compute_fudge(const FHEcontext& context , long p2ePrime)
     long p2r = context.alMod.getPPowR();
 
 
-    // make a as large as possible
-    //long a = p2ePrime/2 - p2r;
-    long a = 0;
-
-    if (a < 0) 
-      a = 0;
-    else
-      a -= (a % p2r);
-
-    long b = p2ePrime/2 - a;
-
-    if (b == p2ePrime/2) {
       // corner case: in this case a == 0 and p == 2
       // corrects for a slight defect for powers of 2 for v-coeffs
       // The exact variance in this case is 
@@ -444,16 +368,6 @@ double compute_fudge(const FHEcontext& context , long p2ePrime)
 
       if (p == 2) eps = 1/(double(p2ePrime)*double(p2ePrime));
 
-    }
-    else {
-      // corrects for defect in  v-coeffs (as well as u-coeffs)
-
-      if (p == 2)
-         eps = (2*b+1)/double(p2ePrime);
-      else
-         eps = (2*b+2)/double(p2ePrime);
-
-    }
   }
 
   return 1 + eps;
@@ -472,73 +386,44 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   // coeff_bound is ultimately a high prob bound on |w0+w1*s|,
   // the coeffs of w0, w1 are chosen uniformly on [-1/2,1/2]
 
-  //cerr << "*** setAE: t=" << targetWeight  << " bound/sqrt(t)=" << (coeff_bound/sqrt(double(targetWeight))) << "\n"; 
-
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
   long r = context.alMod.getR();
   long frstTerm = 2*p2r+2; 
 
-  double logp = log(p);    // log p
+  long e_bnd = floor(log((1L << 30)-1)/log(p));
+  // e_bnd is largest e such that p^e < 2^30
 
   // Start with the smallest e s.t. p^e/2 >= frstTerm*coeff_bound
   ePrime = 0;
-  e = ceil( log(frstTerm*coeff_bound*2) /logp );
-  //OLD: assert(e*logp < log(NTL_SP_BOUND));
-  helib::assertTrue(e*logp < log(1L << 30), "p^e for this smallest e must be single precision");
-  // p^e for this smallest e must be single precision
+  e = r+1;
+  while (e <= e_bnd && power_long(p, e) < frstTerm*coeff_bound*2) 
+    e++;
 
-  // Loop to try and find better solutions, that still satisfy
-  //          (p^{e'} + frstTerm) * coeff_bound <= p^e/2
-  //          <=> p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
-  // stop when you hit p^e > 2^30
-  long eTry = e;
-  long eMinusEprime = e; // want to minimize e-e'
-  do {
-    long p2e = power_long(p, eTry);
+  if (e > e_bnd) Error("setAE: cannot find suitable e");
 
-    // Solve for the largest e' satisfying constraints (1)
-    // p^{e'} <=  p^e/(2*coeff_bound) - frstTerm
-    long ePrimeTry = floor( log(p2e/(2*coeff_bound)-frstTerm) / logp);
+  long ePrimeTry = r+1;
 
-    for (; ePrimeTry > r; ePrimeTry--) {
-      long p2ePrimeTry = power_long(p, ePrimeTry);
-      double fudge = compute_fudge(context, p2ePrimeTry);
-#if 0
-      cerr << "****** fudge=" << fudge 
-	   << " e=" << eTry
-	   << " ePrimeTry=" << ePrimeTry 
-	   << "\n";
-#endif
-      if ((p2ePrimeTry*fudge + frstTerm)*coeff_bound*2 <= p2e) break;
-    }
+  while (ePrimeTry <= e_bnd) {
+    long p2ePrimeTry = power_long(p, ePrimeTry);
+    double fudge = compute_fudge(context, p2ePrimeTry);
+    long eTry = ePrimeTry+1; 
+    while (eTry <= e_bnd && 
+	   power_long(p, eTry) < (p2ePrimeTry*fudge+frstTerm)*coeff_bound*2) 
+      eTry++;
 
-    if (ePrimeTry > r && eTry - ePrimeTry < eMinusEprime) {
+    if (eTry <= e_bnd && eTry-ePrimeTry < e-ePrime) {
       e = eTry;
       ePrime = ePrimeTry;
-      eMinusEprime = e - ePrime;
     }
-  } while ((++eTry)*logp <= log(1L<<30));  
 
-  // Split p^{e'}/2 into a+b with a divisible by p^r
-  long p2ePrime = power_long(p,ePrime);
+    ePrimeTry++;
+  } 
 
-  // make a as large as possible
-  // NOTE: the compute_fudge routine assumes this is how a is
-  // chosen, so don't change this.  Making a as large as possible
-  // makes the u-coeffs as close to uniform as possible
-  // a = p2ePrime/2 - p2r;
   a = 0;
 
-  if (a < 0) 
-    a = 0;
-  else
-    a -= (a % p2r);
-
 #ifdef DEBUG_PRINTOUT
-  long b = p2ePrime/2 - a;
   cerr << "RecryptData::setAE(): e="<<e<<", e'="<<ePrime
-       << ", a="<<a<<", b="<<b<<", sk-hwt="<<targetWeight
        << endl;
 #endif
   return targetWeight;
