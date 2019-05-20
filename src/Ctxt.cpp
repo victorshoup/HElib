@@ -1797,56 +1797,71 @@ void innerProduct(Ctxt& result,
 // Returns an extimate for the noise bound after mod-switching.
 
 #include "powerful.h"
-double Ctxt::rawModSwitch(vector<ZZX>& zzParts, long toModulus) const
+double Ctxt::rawModSwitch(vector<ZZX>& zzParts, long q) const
 {
   // Ensure that new modulus is co-prime with plaintetx space
   const long p2r = getPtxtSpace();
-  //OLD: assert(toModulus>1 && p2r>1 && GCD(toModulus,p2r)==1);
-  helib::assertTrue<helib::InvalidArgument>(toModulus>1, "toModulus must be greater than 1");
+  //OLD: assert(q>1 && p2r>1 && GCD(q,p2r)==1);
+  helib::assertTrue<helib::InvalidArgument>(q>1, "q must be greater than 1");
   helib::assertTrue(p2r>1, "Plaintext space must be greater than 1 for mod switching");
-  helib::assertEq(GCD(toModulus,p2r), 1l, "New modulus and current plaintext space must be co-prime");
+  helib::assertEq(GCD(q,p2r), 1l, "New modulus and current plaintext space must be co-prime");
 
   // Compute the ratio between the current modulus and the new one.
-  // NOTE: toModulus is a long int, so a double for the logarithms and
+  // NOTE: q is a long int, so a double for the logarithms and
   //       xdouble for the ratio itself is sufficient
-  xdouble ratio = xexp(log((double)toModulus)
+  xdouble ratio = xexp(log((double)q)
 		       - context.logOfProduct(getPrimeSet()));
 
   // Compute also the ratio modulo ptxtSpace
-  const ZZ fromModulus = context.productOfPrimes(getPrimeSet());
-  long ratioModP = MulMod(toModulus % p2r, 
-			  InvMod(rem(fromModulus,p2r),p2r), p2r);
+  ZZ Q = context.productOfPrimes(getPrimeSet());
+  ZZ Q_half =  Q/2;
+  long Q_inv_mod_p = InvMod(rem(Q, p2r), p2r);
 
-  mulmod_precon_t precon = PrepMulModPrecon(ratioModP, p2r);
 
   // Scale and round all the integers in all the parts
   zzParts.resize(parts.size());
   const PowerfulDCRT& p2d_conv = *context.rcData.p2dConv;
-  for (size_t i=0; i<parts.size(); i++) {
+  for (long i: range(parts.size())) {
 
-    Vec<ZZ> powerful;
-    p2d_conv.dcrtToPowerful(powerful, parts[i]); // conver to powerful rep
+    Vec<ZZ> pwrfl;
+    p2d_conv.dcrtToPowerful(pwrfl, parts[i]); // convert to powerful rep
 
-    for (long j=0; j<powerful.length(); j++) {
-      const ZZ& coef = powerful[j];
-      long c_mod_p = MulModPrecon(rem(coef,p2r), ratioModP, p2r, precon);
-      xdouble xcoef = ratio*conv<xdouble>(coef); // the scaled coefficient
+    vecRed(pwrfl, pwrfl, Q, false);
+    // reduce to interval [-Q/2,+Q/2]
 
-      // round xcoef to an integer which is equal to c_mod_p modulo ptxtSpace
-      long rounded = conv<long>(floor(xcoef));
-      long r_mod_p = rounded % p2r;
-      if (r_mod_p < 0) r_mod_p += p2r; // r_mod_p in [0,p-1]
+    ZZ c, X, Y, cq;
 
-      if (r_mod_p != c_mod_p) {
-        long delta = SubMod(c_mod_p, r_mod_p, p2r);
-	// either add delta or subtract toModulus-delta
-	rounded += delta;
-	if (delta > toModulus-delta) rounded -= p2r;
+
+    for (long j: range(pwrfl.length())) {
+      c = pwrfl[j];
+      mul(cq, c, q); 
+      DivRem(X, Y, cq, Q); 
+      if (Y > Q_half) {
+        sub(Y, Y, Q);
+        add(X, X, 1);
       }
-      // SetCoeff(zzParts[i],j,rounded);
-      conv(powerful[j], rounded);  // store back in the powerful vector
+
+      // c*q = Q*X + Y, where X = round(c*q/Q);
+
+      long x = conv<long>(X);
+
+      long delta = MulMod(rem(Y, p2r), Q_inv_mod_p, p2r);
+      // delta = Y*Q^{-1} mod p^r
+      // so we have c*q*Q^{-1} = X + Y*Q^{-1} = x + delta (mod p^r)
+      
+      if (delta > p2r/2 || (p2r%2 == 0 && delta == p2r/2 && RandomBnd(2)))
+        delta -= p2r;
+      
+      // The above reduces delta to the interval [-p^r/2,+p^r/2].
+      // If p^r is even, then this complicated looking method
+      // ensures that delta is a zero-mean random variable
+      
+      x += delta;
+
+      pwrfl[j] = x;  // store back in the powerful vector
     }
-    p2d_conv.powerfulToZZX(zzParts[i],powerful); // conver to ZZX
+
+    p2d_conv.powerfulToZZX(zzParts[i],pwrfl); // conver to ZZX
   }
 
   // Return an estimate for the noise

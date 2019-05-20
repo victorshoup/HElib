@@ -89,6 +89,7 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
   helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
 
 
+  long p = context.zMStar.getP();
 
   const RecryptData& rcData = context.rcData;
   const PowerfulDCRT& p2d_conv = *rcData.p2dConv;
@@ -110,12 +111,15 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
 
     // What to add to z to make it divisible by p2e?
     long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
-    if (zMod > p2e/2) { // need to add a positive number
+    if (zMod > p2e/2 || (p==2 && zMod == p2e/2 && RandomBnd(2))) { 
+      // randomize so that u and v have expected value 0
+      // need to add a positive number
       zMod = p2e - zMod;
       u = zMod/p2r;
       if (u > aa) u = aa;
     }
-    else {              // need to add a negative number
+    else {              
+      // need to add a negative number
       u = -(zMod/p2r);
       if (u < -aa) u = -aa;
       zMod = -zMod;
@@ -420,7 +424,8 @@ double compute_fudge(const FHEcontext& context , long p2ePrime)
 
 
     // make a as large as possible
-    long a = p2ePrime/2 - p2r;
+    //long a = p2ePrime/2 - p2r;
+    long a = 0;
 
     if (a < 0) 
       a = 0;
@@ -430,9 +435,14 @@ double compute_fudge(const FHEcontext& context , long p2ePrime)
     long b = p2ePrime/2 - a;
 
     if (b == p2ePrime/2) {
-      // corner case: in this case a == 0
+      // corner case: in this case a == 0 and p == 2
       // corrects for a slight defect for powers of 2 for v-coeffs
-      if (p == 2) eps = 1/double(p2ePrime);
+      // The exact variance in this case is 
+      //    (N^2)/3 + 1/6 = ((N^2)/3)*(1 + 1/(2*N^2)), where N = 2^{e'-1}
+      // So the std dev is at most
+      //    N/sqrt(3)*(1 + 1/(4*N^2))
+
+      if (p == 2) eps = 1/(double(p2ePrime)*double(p2ePrime));
 
     }
     else {
@@ -467,12 +477,13 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long p = context.zMStar.getP();
   long p2r = context.alMod.getPPowR();
   long r = context.alMod.getR();
-  long frstTerm = 2*p2r+3;
+  long frstTerm = 2*p2r+2; 
+
   double logp = log(p);    // log p
 
-  // Start with the smallest e s.t. p^e/2 >= (2*p^r+4)*coeff_bound
+  // Start with the smallest e s.t. p^e/2 >= frstTerm*coeff_bound
   ePrime = 0;
-  e = ceil( log((frstTerm+1)*coeff_bound*2) /logp );
+  e = ceil( log(frstTerm*coeff_bound*2) /logp );
   //OLD: assert(e*logp < log(NTL_SP_BOUND));
   helib::assertTrue(e*logp < log(1L << 30), "p^e for this smallest e must be single precision");
   // p^e for this smallest e must be single precision
@@ -499,7 +510,7 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 	   << " ePrimeTry=" << ePrimeTry 
 	   << "\n";
 #endif
-      if ((p2ePrimeTry + frstTerm)*coeff_bound*fudge*2 <= p2e) break;
+      if ((p2ePrimeTry*fudge + frstTerm)*coeff_bound*2 <= p2e) break;
     }
 
     if (ePrimeTry > r && eTry - ePrimeTry < eMinusEprime) {
@@ -516,7 +527,8 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   // NOTE: the compute_fudge routine assumes this is how a is
   // chosen, so don't change this.  Making a as large as possible
   // makes the u-coeffs as close to uniform as possible
-  a = p2ePrime/2 - p2r;
+  // a = p2ePrime/2 - p2r;
+  a = 0;
 
   if (a < 0) 
     a = 0;
