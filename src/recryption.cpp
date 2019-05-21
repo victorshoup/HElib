@@ -350,23 +350,41 @@ RecryptData::~RecryptData()
 // the v-coeffs are not quite uniform
 
 static 
-double compute_fudge(const FHEcontext& context , long p2ePrime)
+double compute_fudge(long p2ePrime, long p2e)
 {
   double eps = 0;
 
   if (p2ePrime > 1) {
-    long p = context.zMStar.getP();
-    long p2r = context.alMod.getPPowR();
 
 
-      // corner case: in this case a == 0 and p == 2
-      // corrects for a slight defect for powers of 2 for v-coeffs
-      // The exact variance in this case is 
-      //    (N^2)/3 + 1/6 = ((N^2)/3)*(1 + 1/(2*N^2)), where N = 2^{e'-1}
-      // So the std dev is at most
-      //    N/sqrt(3)*(1 + 1/(4*N^2))
+      if (p2ePrime%2 == 0) {
+         eps = 1/(double(p2ePrime)*double(p2ePrime));
 
-      if (p == 2) eps = 1/(double(p2ePrime)*double(p2ePrime));
+	 // The exact variance in this case is at most
+	 //    (N^2)/3 + 1/6 = ((N^2)/3)*(1 + 1/(2*N^2)), where N = 2^{e'}/2
+	 // So the std dev is at most
+	 //    N/sqrt(3)*(1 + 1/(4*N^2))
+
+      }
+      else{
+         eps = 1/double(p2e);
+
+         // We are computing X + Y mod p^{e'}, where
+         // X and Y are independent.
+         // Y is uniformly distributed over 
+         //    -floor(p^{e'}/2)..floor(p^{e'}/2)
+         // X is distributed over 
+         //    -floor(p^e/2)-1..floor(p^e/2)+1,
+         // where each endpoint occurs with probability p^e/2,
+         // and the others values are equally likely.
+
+         // The variance in this case is bounded by 
+         //   (N^2)/3*(1-s) + N^2*s = (N^2)/3*(1+2*s),
+         //       where = p^{e'}/2 and s = 1/p^e
+         // So the std dev is bounded by
+         //    N/sqrt(3)*sqrt(1+2*s) <= N/sqrt(3)*(1+s)   
+
+      }
 
   }
 
@@ -393,11 +411,11 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   long e_bnd = 0;
   long p2e_bnd = 1;
-  while (p2e_bnd <= ((1L << 30)-1)/p) { // NOTE: this avoids overflow
+  while (p2e_bnd <= ((1L << 30)-2)/p) { // NOTE: this avoids overflow
     e_bnd++;
     p2e_bnd *= p;
   }
-  // e_bnd is largest e such that p^e < 2^30
+  // e_bnd is largest e such that p^e+1 < 2^30
 
   // Start with the smallest e s.t. p^e/2 >= frstTerm*coeff_bound
   ePrime = 0;
@@ -411,11 +429,14 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
 
   while (ePrimeTry <= e_bnd) {
     long p2ePrimeTry = power_long(p, ePrimeTry);
-    double fudge = compute_fudge(context, p2ePrimeTry);
     long eTry = ePrimeTry+1; 
-    while (eTry <= e_bnd && 
-	   power_long(p, eTry) < (p2ePrimeTry*fudge+frstTerm)*coeff_bound*2) 
+    while (eTry <= e_bnd && eTry-ePrimeTry < e-ePrime) {
+      long p2eTry = power_long(p, eTry);
+      double fudge = compute_fudge(p2ePrimeTry, p2eTry);
+      if (p2eTry >= (p2ePrimeTry*fudge+frstTerm)*coeff_bound*2) break;
+
       eTry++;
+    }
 
     if (eTry <= e_bnd && eTry-ePrimeTry < e-ePrime) {
       e = eTry;
