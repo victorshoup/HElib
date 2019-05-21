@@ -360,7 +360,15 @@ double compute_fudge(long p2ePrime, long p2e)
       if (p2ePrime%2 == 0) {
          eps = 1/(double(p2ePrime)*double(p2ePrime));
 
-	 // The exact variance in this case is at most
+	 // The exact variance in this case is at most the variance
+         // of a random variable that is distributed over
+         //    -N..+N
+         // where N = 2^{e'}/2. 
+         // Each endpoint occurs with probability 1/(4*N),
+         // and the remaining values each occur with the same probability 
+         // 1/(2*N)
+
+         // This variance is exactly computed as
 	 //    (N^2)/3 + 1/6 = ((N^2)/3)*(1 + 1/(2*N^2)), where N = 2^{e'}/2
 	 // So the std dev is at most
 	 //    N/sqrt(3)*(1 + 1/(4*N^2))
@@ -372,17 +380,17 @@ double compute_fudge(long p2ePrime, long p2e)
          // We are computing X + Y mod p^{e'}, where
          // X and Y are independent.
          // Y is uniformly distributed over 
-         //    -floor(p^{e'}/2)..floor(p^{e'}/2)
+         //    -floor(p^{r}/2)..floor(p^{r}/2)
          // X is distributed over 
          //    -floor(p^e/2)-1..floor(p^e/2)+1,
-         // where each endpoint occurs with probability p^e/2,
-         // and the others values are equally likely.
+         // where each endpoint occurs with probability 1 / (2*(p^e+1)),
+         // and the remaining p^e values are equally likely
 
          // The variance in this case is bounded by 
-         //   (N^2)/3*(1-s) + N^2*s = (N^2)/3*(1+2*s),
-         //       where = p^{e'}/2 and s = 1/p^e
+         //   (N^2)/3*(1-eps) + (N^2)*eps = (N^2)/3*(1+2*eps),
+         //       where = p^{e'}/2 and eps < 1/p^e
          // So the std dev is bounded by
-         //    N/sqrt(3)*sqrt(1+2*s) <= N/sqrt(3)*(1+s)   
+         //    N/sqrt(3)*sqrt(1+2*eps) <= N/sqrt(3)*(1+eps)   
 
       }
 
