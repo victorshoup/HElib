@@ -174,8 +174,9 @@ public:
   //=======================================
 
   //! This computes a high probability bound on the L-infty norm
-  //! of x0+s*x1 in the pwrfl basis, assuming x0 and x1 are chosen with coeffs
+  //! of x0+s*x1 in the pwrfl basis, assuming is chosen with coeffs
   //! in the pwrfl basis uniformly and independently dist'd over [-1/2,1/2],
+  //! x0 has arbitrary coeffs over [-1/2,1/2] in the pwrfl basis,
   //! and assuming s is chosen with skHwt nonzero coeffs mod X^m-1
   //! in the power basis (uniformly and independently over {-1,1}).
   //! The bound should be satisfied with probability epsilon.
@@ -195,7 +196,7 @@ public:
     double c_m = zMStar.get_cM();
     // multiply by this fudge factor
 
-    return c_m * noiseBoundForUniform(0.5, skHwt*(1L << k) + 1);
+    return c_m * (0.5+ noiseBoundForUniform(0.5, skHwt*(1L << k)));
   }
 
   double noiseBoundForHWt(long hwt, long degBound) const
