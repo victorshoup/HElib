@@ -391,7 +391,12 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
   long r = context.alMod.getR();
   long frstTerm = 2*p2r+2; 
 
-  long e_bnd = floor(log((1L << 30)-1)/log(p));
+  long e_bnd = 0;
+  long p2e_bnd = 1;
+  while (p2e_bnd <= ((1L << 30)-1)/p) { // NOTE: this avoids overflow
+    e_bnd++;
+    p2e_bnd *= p;
+  }
   // e_bnd is largest e such that p^e < 2^30
 
   // Start with the smallest e s.t. p^e/2 >= frstTerm*coeff_bound
