@@ -1548,9 +1548,30 @@ xdouble Ctxt::modSwitchAddedNoiseBound() const
     }
   }
 
+#if 1
+  // B0 represents the noise contributed by rounding to an integer
+  double B0 = context.noiseBoundForUniform(0.5, context.zMStar.getPhiM());
+
+  // B1 represents the noise contributed by the mod-p^r correction
+  double B1 = context.noiseBoundForUniform(double(ptxtSpace)/2.0,
+                                           context.zMStar.getPhiM());
+
+  // This corrects for the difference between continuous and discrete
+  // See comment for compute_fudge in recryption.cpp.
+  if (ptxtSpace%2 == 0) B1 = B1*(1+1/fsquare(ptxtSpace));
+
+  double roundingNoise = B0 + B1;
+
+  // FIXME: the design document should be updated to reflect this
+
+#else
   double roundingNoise = context.noiseBoundForUniform(double(ptxtSpace)/2.0,
                                                       context.zMStar.getPhiM());
+
+#endif
+
   return addedNoise * roundingNoise;
+
 }
 
 
@@ -1849,12 +1870,9 @@ double Ctxt::rawModSwitch(vector<ZZX>& zzParts, long q) const
       // delta = Y*Q^{-1} mod p^r
       // so we have c*q*Q^{-1} = X + Y*Q^{-1} = x + delta (mod p^r)
       
+      // NOTE: this makes sure we get a truly balanced remainder
       if (delta > p2r/2 || (p2r%2 == 0 && delta == p2r/2 && RandomBnd(2)))
         delta -= p2r;
-      
-      // The above reduces delta to the interval [-p^r/2,+p^r/2].
-      // If p^r is even, then this complicated looking method
-      // ensures that delta is a zero-mean random variable
       
       x += delta;
 

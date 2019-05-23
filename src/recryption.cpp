@@ -111,9 +111,9 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
 
     // What to add to z to make it divisible by p2e?
     long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
+    // NOTE: this makes sure we get a truly balanced remainder
     if (zMod > p2e/2 || (p==2 && zMod == p2e/2 && RandomBnd(2))) { 
       // randomize so that u and v have expected value 0
-      // need to add a positive number
       zMod = p2e - zMod;
       u = zMod/p2r;
       if (u > aa) u = aa;
@@ -358,7 +358,7 @@ double compute_fudge(long p2ePrime, long p2e)
 
 
       if (p2ePrime%2 == 0) {
-         eps = 1/(double(p2ePrime)*double(p2ePrime));
+         eps = 1/fsquare(p2ePrime);
 
 	 // The exact variance in this case is at most the variance
          // of a random variable that is distributed over

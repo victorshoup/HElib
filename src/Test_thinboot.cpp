@@ -106,6 +106,9 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     fhe_stats = true;
 
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
+  if (fhe_stats && numkey > 0 && numkey%100 == 0) 
+    fhe_stats_print(numkey, context);
+
   cerr << "*********** iter=" << (numkey+1) << "\n";
 
   t = -GetTime();
@@ -146,20 +149,37 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     val1[i] = conv<ZZX>(conv<ZZ>(rep(val0[i])));
   }
 
-  vector<ZZX> val_const1;
-  val_const1.resize(nslots);
-  for (long i = 0; i < nslots; i++) {
-    val_const1[i] = 1;
-  }
 
   Ctxt c1(publicKey);
   ea.encrypt(c1, publicKey, val1);
 
   Ctxt c2(c1);
-  if (!noPrint) CheckCtxt(c2, "before recryption");
+
+  if (!noPrint) CheckCtxt(c2, "before multiplications");
+
+  long mul_count = -1;
+  Ctxt next_c2(c2);
+  do {
+    c2 = next_c2;
+    next_c2.multiplyBy(c1);
+    mul_count++;
+  } 
+  while (next_c2.bitCapacity() >= 100);
+
+  if (!noPrint) {
+    cout << "mul_count=" << mul_count << "\n";
+    CheckCtxt(c2, "before recryption");
+  }
 
   publicKey.thinReCrypt(c2);
   if (!noPrint) CheckCtxt(c2, "after recryption");
+
+  for (auto& x: val0)
+    x = power(x, mul_count+1);
+
+  for (long i = 0; i < nslots; i++) {
+    val1[i] = conv<ZZX>(conv<ZZ>(rep(val0[i])));
+  }
 
   vector<ZZX> val2;
   ea.decrypt(c2, secretKey, val2);

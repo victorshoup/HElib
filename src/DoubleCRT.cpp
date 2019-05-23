@@ -1177,13 +1177,18 @@ void DoubleCRT::scaleDownToSet(const IndexSet& s, long ptxtSpace)
     // divisible by ptxtSpace.
     else {
       long p_over_2 = ptxtSpace/2;
+      long p_mod_2 = ptxtSpace%2;
       long prodInv = InvMod(rem(diffProd,ptxtSpace), ptxtSpace);
       mulmod_precon_t precon = PrepMulModPrecon(prodInv, ptxtSpace); // optimization
       for (long i: range(delta_len)) { 
         long delta_i_modP = rem(delta.rep[i],ptxtSpace);
         if (delta_i_modP != 0) { // if not already 0 mod ptxtSpace
           delta_i_modP = MulModPrecon(delta_i_modP, prodInv, ptxtSpace, precon);
-          if (delta_i_modP > p_over_2) delta_i_modP -= ptxtSpace;
+
+          // NOTE: this makes sure we get a more truly balanced remainder 
+          if (delta_i_modP > p_over_2 ||
+              (p_mod_2 == 0 && delta_i_modP == p_over_2 && RandomBnd(2))) 
+            delta_i_modP -= ptxtSpace;
           delta.rep[i] -= diffProd * delta_i_modP;
         }
       }
