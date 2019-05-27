@@ -42,6 +42,162 @@ typedef complex<double> cmplx_t;
 
 
 
+/***************************************************************
+
+The code here is translated from NTL's small FFT prime, which in turn
+is translated from some older software by David Harvey.
+
+For completeness, here is David Harvey's original copyright notice:
+
+==============================================================================
+
+fft62: a library for number-theoretic transforms
+
+Copyright (C) 2013, David Harvey
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+==============================================================================
+
+I've also implemented a "truncated FFT interface", although I don't really
+use it right now, except to get some better cache behavior via recursion.
+I may do something more with this later.
+
+TRUNCATED FFT
+
+This code is derived from code originally developed
+by David Harvey.  I include his original documentation,
+annotated appropriately to highlight differences in
+the implemebtation (see NOTEs).
+
+The DFT is defined as follows.
+
+Let the input sequence be a_0, ..., a_{N-1}.
+
+Let w = standard primitive N-th root of 1, i.e. w = g^(2^FFT62_MAX_LGN / N),
+where g = some fixed element of Z/pZ of order 2^FFT62_MAX_LGN.
+
+Let Z = an element of (Z/pZ)^* (twisting parameter).
+
+Then the output sequence is
+  b_j = \sum_{0 <= i < N} Z^i a_i w^(ij'), for 0 <= j < N,
+where j' is the length-lgN bit-reversal of j.
+
+Some of the FFT routines can operate on truncated sequences of certain
+"admissible" sizes. A size parameter n is admissible if 1 <= n <= N, and n is
+divisible by a certain power of 2. The precise power depends on the recursive
+array decomposition of the FFT. The smallest admissible n' >= n can be
+obtained via fft62_next_size().
+
+NOTE: the twising parameter is not implemented.
+NOTE: the next admissible size function is called FFTRoundUp,
+
+
+Truncated FFT interface is as follows:
+
+xn and yn must be admissible sizes for N.
+
+Input in xp[] is a_0, a_1, ..., a_{xn-1}. Assumes a_i = 0 for xn <= i < N.
+
+Output in yp[] is b_0, ..., b_{yn-1}, i.e. only first yn outputs are computed.
+
+Twisting parameter Z is described by z and lgH. If z == 0, then Z = basic
+2^lgH-th root of 1, and must have lgH >= lgN + 1. If z != 0, then Z = z
+(and lgH is ignored).
+
+The buffers {xp,xn} and {yp,yn} may overlap, but only if xp == yp.
+
+Inputs are in [0, 2p), outputs are in [0, 2p).
+
+threads = number of OpenMP threads to use.
+
+
+
+Inverse truncated FFT interface is as follows.
+
+xn and yn must be admissible sizes for N, with yn <= xn.
+
+Input in xp[] is b_0, b_1, ..., b_{yn-1}, N*a_{yn}, ..., N*a_{xn-1}.
+
+Assumes a_i = 0 for xn <= i < N.
+
+Output in yp[] is N*a_0, ..., N*a_{yn-1}.
+
+Twisting parameter Z is described by z and lgH. If z == 0, then Z = basic
+2^lgH-th root of 1, and must have lgH >= lgN + 1. If z != 0, then Z = z^(-1)
+(and lgH is ignored).
+
+The buffers {xp,xn} and {yp,yn} may overlap, but only if xp == yp.
+
+Inputs are in [0, 4p), outputs are in [0, 4p).
+
+threads = number of OpenMP threads to use.
+
+(note: no function actually implements this interface in full generality!
+This is because it is tricky (and not that useful) to implement the twisting
+parameter when xn != yn.)
+
+NOTE: threads and twisting parameter are not used here.
+NOTE: the code has been re-written and simplified so that
+  everything is done in place, so xp == yp.
+
+
+***************************************************************/
+
+
+
+#define PGFFT_FFT_RDUP (4)
+// Currently, this should be at least 2 to support
+// loop unrolling in the FFT implementation
+
+
+static inline long 
+FFTRoundUp(long xn, long k)
+{
+   long n = 1L << k;
+   if (xn <= 0) return n;
+   // default truncation value of 0 gets converted to n
+
+   xn = ((xn+((1L << PGFFT_FFT_RDUP)-1)) >> PGFFT_FFT_RDUP) << PGFFT_FFT_RDUP;
+
+   if (k >= 10) {
+      if (xn > n - (n >> 4)) xn = n;
+   }
+   else {
+      if (xn > n - (n >> 3)) xn = n;
+   }
+   // truncation just a bit below n does not really help
+   // at all, and can sometimes slow things down slightly, so round up
+   // to n.  This also takes care of cases where xn > n.
+   // Actually, for smallish n, we should round up sooner,
+   // at n-n/8, and for larger n, we should round up later,
+   // at n-m/16.  At least, experimentally, this is what I see.
+
+   return xn;
+}
+
+
 
 
 #define fwd_butterfly(xx0, xx1, w)  \
