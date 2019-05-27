@@ -408,7 +408,7 @@ void Ctxt::modDownToSet(const IndexSet &s)
     cerr << "Ctxt::modDownToSet: DEGENERATE DROP\n";
   } 
   else {                               // do real mod switching
-#if 0
+#if 1
     ZZX delta;
     ZZ diff = context.productOfPrimes(setDiff);
     xdouble xdiff = conv<xdouble>(diff);
