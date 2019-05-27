@@ -171,7 +171,16 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     CheckCtxt(c2, "before recryption");
   }
 
+  resetAllTimers();
+
+  { FHE_NTIMER_START(AAA_thinRecrypt);
+
   publicKey.thinReCrypt(c2);
+ 
+  }
+
+  printAllTimers();
+
   if (!noPrint) CheckCtxt(c2, "after recryption");
 
   for (auto& x: val0)

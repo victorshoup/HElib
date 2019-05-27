@@ -90,6 +90,7 @@ inline double embeddingL2Norm(const zzX& f, const PAlgebra& palg)
 
 //! Computing the L-infinity norm of the canonical embedding
 double embeddingLargestCoeff(const zzX& f, const PAlgebra& palg);
+double embeddingLargestCoeff(const NTL::Vec<double>& f, const PAlgebra& palg);
 
 // Same as above, for ZZX
 NTL::xdouble embeddingL2NormSquared(const NTL::ZZX& f, const PAlgebra& palg);
@@ -105,6 +106,9 @@ void canonicalEmbedding(std::vector<cx_double>& v,
 
 void canonicalEmbedding(std::vector<cx_double>& v,
                         const NTL::ZZX& f, const PAlgebra& palg);
+
+void canonicalEmbedding(std::vector<cx_double>& v,
+                        const NTL::Vec<double>& f, const PAlgebra& palg);
 
 //! Roughly the inverse of canonicalEmbedding, except for scaling and rounding issues
 void embedInSlots(zzX& f, const std::vector<cx_double>& v,

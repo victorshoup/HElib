@@ -408,14 +408,53 @@ void Ctxt::modDownToSet(const IndexSet &s)
     cerr << "Ctxt::modDownToSet: DEGENERATE DROP\n";
   } 
   else {                               // do real mod switching
-    for (auto &part : parts)
-      part.scaleDownToSet(intersection, ptxtSpace);
+#if 1
+    ZZX delta;
+    ZZ diff = context.productOfPrimes(setDiff);
+    xdouble xdiff = conv<xdouble>(diff);
+    Vec<double> fdelta;
+    xdouble addedNoise(0.0);
+
+    for (auto &part : parts) {
+      part.scaleDownToSet(intersection, ptxtSpace, delta);
+      fdelta.SetLength(delta.rep.length());
+      for (long j: range(delta.rep.length()))
+        fdelta[j] = conv<double>( conv<xdouble>(delta.rep[j])/xdiff );
+
+      double norm = embeddingLargestCoeff(fdelta, context.zMStar);
+
+      if (part.skHandle.isOne())
+        addedNoise += norm;
+      else {
+	long keyId = part.skHandle.getSecretKeyID();
+	long d = part.skHandle.getPowerOfS();
+	xdouble h = conv<xdouble>(pubKey.getSKeyBound(keyId));
+
+	addedNoise += norm*NTL::power(h, d);
+      }
+    }
+
+    // update the noise estimate
+    xdouble f = xexp(context.logOfProduct(setDiff));
+    ratFactor /= f;  // The factor in CKKS encryption
+    noiseBound /= f;
+    noiseBound += addedNoise;
+
+    if (addedNoise > addedNoiseBound) Error("addedNoiseBound too big");
+#else
+    ZZX delta;
+
+    for (auto &part : parts) {
+      part.scaleDownToSet(intersection, ptxtSpace, delta);
+    }
 
     // update the noise estimate
     xdouble f = xexp(context.logOfProduct(setDiff));
     ratFactor /= f;  // The factor in CKKS encryption
     noiseBound /= f;
     noiseBound += addedNoiseBound;
+
+#endif
   }
   primeSet.remove(setDiff); // remove the primes not in s
   //OLD: assert(verifyPrimeSet()); // sanity-check: ensure primeSet is still valid

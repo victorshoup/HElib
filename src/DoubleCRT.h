@@ -380,7 +380,7 @@ public:
 
 
   // used to implement modulus switching
-  void scaleDownToSet(const IndexSet& s, long ptxtSpace);
+  void scaleDownToSet(const IndexSet& s, long ptxtSpace, NTL::ZZX& delta);
 
 
   void FFT(const NTL::ZZX& poly, const IndexSet& s);

@@ -1142,7 +1142,7 @@ xdouble DoubleCRT::sampleUniform(const ZZ& B)
   return retval;
 }
 
-void DoubleCRT::scaleDownToSet(const IndexSet& s, long ptxtSpace)
+void DoubleCRT::scaleDownToSet(const IndexSet& s, long ptxtSpace, ZZX& delta)
 {
   IndexSet diff = getIndexSet() / s;
   if (empty(diff)) return;     // nothing to do
@@ -1156,7 +1156,6 @@ void DoubleCRT::scaleDownToSet(const IndexSet& s, long ptxtSpace)
     return;
   }
 
-  ZZX delta;
   ZZ diffProd = context.productOfPrimes(diff); // mod-down by this factor
   toPoly(delta, diff); // convert to coeff-representation modulo diffProd
 

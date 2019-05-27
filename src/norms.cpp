@@ -115,6 +115,19 @@ double embeddingLargestCoeff(const zzX& f, const PAlgebra& palg)
   return sqrt(mx);
 }
 
+double embeddingLargestCoeff(const Vec<double>& f, const PAlgebra& palg)
+{
+  FHE_NTIMER_START(AAA_embeddingLargest);
+  std::vector<cx_double> emb;
+  canonicalEmbedding(emb, f, palg);
+  double mx = 0.0;
+  for (auto& x : emb) {
+    double n = std::norm(x);
+    if (mx < n) mx = n;
+  }
+  return sqrt(mx);
+}
+
 
 static xdouble convertAndScale(zzX& ff, const NTL::ZZX& f)
 {
