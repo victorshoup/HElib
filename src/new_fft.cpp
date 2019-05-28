@@ -14,25 +14,45 @@
 
 
 
+
 #include <vector>
 #include <complex>
+#include <cassert>
 
 
 
 
 class PGFFT {
+public:
+   explicit
+   PGFFT(long n_);
+
+   void apply(std::vector<std::complex<double>>& v) const;
+
+
+private:
    long n;
    long k;
 
-   std::vector<std::vector<std::complex<double>>> tab;
-   std::vector<long> rev;
+   long strategy;
 
+   // holds all of the twiddle factors
+   std::vector<std::vector<std::complex<double>>> tab;
+
+   // additional data structures needed for Bluestein
+   std::vector<std::complex<double>> powers;
+   std::vector<std::complex<double>> Rb;
+
+   // additonal data structures needed for 2^k-point FFT
+   std::vector<long> rev, rev1;
 
 
 };
 
 
 
+// set to 0 to disable the truncated Bluestein
+#define PGFFT_USE_TRUNCATED_BLUE (1)
 
 using std::vector;
 using std::complex;
@@ -95,9 +115,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
 
-I've also implemented a "truncated FFT interface", although I don't really
-use it right now, except to get some better cache behavior via recursion.
-I may do something more with this later.
 
 TRUNCATED FFT
 
@@ -334,7 +351,7 @@ new_fft_base(cmplx_t* xp, long lgN, const vector<vector<cmplx_t>>& tab)
 // an array of size N, all of which may be overwitten
 // during the computation.
 
-#define PGFFT_NEW_FFT_THRESH (12)
+#define PGFFT_NEW_FFT_THRESH (10)
 
 static
 void new_fft_short(cmplx_t* xp, long yn, long xn, long lgN, 
@@ -744,6 +761,12 @@ BRC_init(long k, vector<long>& rev)
 }
 
 
+#define PGFFT_BRC_THRESH (11)
+#define PGFFT_BRC_Q (5)
+
+// Must have PGFFT_BRC_THRESH >= 2*PGFFT_BRC_Q
+// Should also have (1L << (2*PGFFT_BRC_Q)) small enough
+// so that we can fit that many long's into the cache
 
 static
 void BasicBitReverseCopy(cmplx_t *B, 
@@ -756,6 +779,73 @@ void BasicBitReverseCopy(cmplx_t *B,
       B[rev[i]] = A[i];
 }
 
+static void 
+COBRA(cmplx_t * PGFFT_RESTRICT B, const cmplx_t * PGFFT_RESTRICT A, long k,
+      const vector<long>& rev, const vector<long> rev1)
+{
+   long q = PGFFT_BRC_Q;
+   long k1 = k - 2*q;
+
+   vector<cmplx_t> BRC_temp(1L << (2*q));
+
+   cmplx_t * PGFFT_RESTRICT T = &BRC_temp[0];
+   const long * PGFFT_RESTRICT rev_k1 = &rev[0];
+   const long * PGFFT_RESTRICT rev_q = &rev1[0];
+   
+
+   for (long b = 0; b < (1L << k1); b++) {
+      long b1 = rev_k1[b]; 
+      for (long a = 0; a < (1L << q); a++) {
+         long a1 = rev_q[a]; 
+         for (long c = 0; c < (1L << q); c++) 
+            T[(a1 << q) + c] = A[(a << (k1+q)) + (b << q) + c]; 
+      }
+
+      for (long c = 0; c < (1L << q); c++) {
+         long c1 = rev_q[c];
+         for (long a1 = 0; a1 < (1L << q); a1++) 
+            B[(c1 << (k1+q)) + (b1 << q) + a1] = T[(a1 << q) + c];
+      }
+   }
+}
+
+
+static long 
+pow2_precomp(long n, vector<long>& rev, vector<long>& rev1, vector<vector<cmplx_t>>& tab)
+{
+   // k = least k such that 2^k >= n
+   long k = 0;
+   while ((1L << k) < n) k++;
+
+   compute_table(tab, k);
+
+   if (k <= PGFFT_BRC_THRESH) {
+      BRC_init(k, rev);
+   }
+   else {
+      long q = PGFFT_BRC_Q;
+      long k1 = k - 2*q;
+      BRC_init(k1, rev);
+      BRC_init(q, rev1);
+   }
+   
+
+   return k;
+}
+
+static void
+pow2_comp(vector<cmplx_t>& a, 
+                  long n, long k, const vector<long>& rev, const vector<long>& rev1,
+                  const vector<vector<cmplx_t>>& tab)
+{
+   vector<cmplx_t> x(a);
+
+   new_fft(&x[0], k, tab);
+   if (k <= PGFFT_BRC_THRESH)
+      BasicBitReverseCopy(&a[0], &x[0], k, rev);
+   else
+      COBRA(&a[0], &x[0], k, rev, rev1);
+}
 
 static long
 bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb, 
@@ -799,9 +889,9 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 }
 
 
-static long
+static void
 bluestein_comp(vector<cmplx_t>& a, 
-                  long n, long k, const vector<cmplx_t>& powers, vector<cmplx_t>& Rb, 
+                  long n, long k, const vector<cmplx_t>& powers, const vector<cmplx_t>& Rb, 
                   const vector<vector<cmplx_t>>& tab)
 {
    long N = 1L << k;
@@ -873,9 +963,9 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 }
 
 
-static long
+static void
 bluestein_comp1(vector<cmplx_t>& a, 
-                  long n, long k, const vector<cmplx_t>& powers, vector<cmplx_t>& Rb, 
+                  long n, long k, const vector<cmplx_t>& powers, const vector<cmplx_t>& Rb, 
                   const vector<vector<cmplx_t>>& tab)
 {
    long N = 1L << k;
@@ -907,8 +997,85 @@ bluestein_comp1(vector<cmplx_t>& a,
 
 }
 
+#define PGFFT_STRATEGY_NULL  (0)
+#define PGFFT_STRATEGY_POW2  (1)
+#define PGFFT_STRATEGY_BLUE  (2)
+#define PGFFT_STRATEGY_TBLUE (3)
 
+static long choose_strategy(long n)
+{
+   if (n == 1) return PGFFT_STRATEGY_NULL; 
 
+   if ((n & (n - 1)) == 0) return PGFFT_STRATEGY_POW2; 
+
+   if (n % 2 == 0 || !PGFFT_USE_TRUNCATED_BLUE) return PGFFT_STRATEGY_BLUE;
+
+   // choose between Bluestein and truncated Bluestein
+
+   // k = least k such that 2^k >= 2*n-1
+   long k = 0;
+   while ((1L << k) < 2*n-1) k++;
+
+   long rdup = FFTRoundUp(2*n-1, k);
+   if (rdup == (1L << k)) return PGFFT_STRATEGY_BLUE;
+
+   return PGFFT_STRATEGY_TBLUE;
+}
+
+PGFFT::PGFFT(long n_)
+{
+   assert(n_ > 0);
+   n = n_;
+
+   strategy = choose_strategy(n);
+
+   switch (strategy) {
+
+   case PGFFT_STRATEGY_NULL: 
+      break;
+
+   case PGFFT_STRATEGY_POW2:
+      k = pow2_precomp(n, rev, rev1, tab);
+      break;
+
+   case PGFFT_STRATEGY_BLUE:
+      k = bluestein_precomp(n, powers, Rb, tab);
+      break;
+
+   case PGFFT_STRATEGY_TBLUE:
+      k = bluestein_precomp1(n, powers, Rb, tab);
+      break;
+
+   default: ;
+
+   }
+}
+
+void PGFFT::apply(vector<cmplx_t>& v) const
+{
+   assert(long(v.size()) == n);
+
+   switch (strategy) {
+
+   case PGFFT_STRATEGY_NULL: 
+      break;
+
+   case PGFFT_STRATEGY_POW2:
+      pow2_comp(v, n, k, rev, rev1, tab);
+      break;
+
+   case PGFFT_STRATEGY_BLUE:
+      bluestein_comp(v, n, k, powers, Rb, tab);
+      break;
+
+   case PGFFT_STRATEGY_TBLUE:
+      bluestein_comp1(v, n, k, powers, Rb, tab);
+      break;
+
+   default: ;
+
+   }
+}
 
 //================== Fft ====================
 
@@ -1152,7 +1319,8 @@ int main()
       std::cout << v[i] << "\n";
 #elif 0
    //long n = 28679;
-   long n = 45551;
+   long n = 16*1024;
+   // long n = 45551;
    // long n = 17;
 
    vector<cmplx_t> v(n);
@@ -1162,13 +1330,20 @@ int main()
    vector<cmplx_t> v0(v);
 
 
+#if 0
    vector<cmplx_t> powers;
    vector<cmplx_t> Rb;
    vector<vector<cmplx_t>> tab;
 
-   long k = bluestein_precomp1(n, powers, Rb, tab);
+   long k = bluestein_precomp(n, powers, Rb, tab);
 
-   bluestein_comp1(v, n, k, powers, Rb, tab);
+   bluestein_comp(v, n, k, powers, Rb, tab);
+#else
+
+   PGFFT pgfft(n);
+   pgfft.apply(v);
+
+#endif
 
    vector<lcx> vv(n);
    for (int i = 0; i < n; i++)
@@ -1188,8 +1363,10 @@ int main()
    
    
 #else
-   long n = 28679;
-   // long n = 45551;
+   //long n = 28679;
+   long n = 64*1024;
+   //long n = 45551;
+   //long n = 90001;
 
    vector<cmplx_t> v(n);
    for (long i = 0; i < n; i++)
@@ -1197,14 +1374,10 @@ int main()
 
    vector<cmplx_t> w = v;
 
-   vector<cmplx_t> powers;
-   vector<cmplx_t> Rb;
-   vector<vector<cmplx_t>> tab;
-
-   long k = bluestein_precomp(n, powers, Rb, tab);
+   PGFFT pgfft(n);
 
    double t;
-   TIME_IT(t, (v=w, bluestein_comp(v, n, k, powers, Rb, tab), check_sum += v[0])); 
+   TIME_IT(t, (v=w, pgfft.apply(v), check_sum += v[0])); 
 
    std::cout << t << "\n";
    std::cout << check_sum << "\n";
