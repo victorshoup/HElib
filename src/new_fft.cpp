@@ -3,8 +3,21 @@
 #include <iostream>
 
 
+// these are just for the Fft stuff
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+
+
+
+
+
 #include <vector>
 #include <complex>
+
+
 
 
 class PGFFT {
@@ -25,6 +38,8 @@ using std::vector;
 using std::complex;
 
 typedef complex<double> cmplx_t;
+
+typedef long double ldbl;
 
 
 #if (defined(__GNUC__) && (__GNUC__ >= 4))
@@ -688,13 +703,15 @@ compute_table(vector<vector<cmplx_t>>& tab, long k)
 {
   if (k < 2) return;
 
+  const ldbl pi = atan(ldbl(1)) * 4.0;
+
   tab.resize(k+1);
   for (long s = 2; s <= k; s++) {
     long m = 1L << s;
     tab[s].resize(m/2);
     for (long j = 0; j < m/2; j++) {
-      double angle = -((2 * M_PI) * (double(j)/double(m)));
-      tab[s][j] = std::polar(1.0, angle);
+      ldbl angle = -((2 * pi) * (ldbl(j)/ldbl(m)));
+      tab[s][j] = cmplx_t(cos(angle), sin(angle));
     }
   }
 }
@@ -750,14 +767,16 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 
    compute_table(tab, k);
 
+   const ldbl pi = atan(ldbl(1)) * 4.0;
+
    powers.resize(n);
    powers[0] = 1;
    long i_sqr = 0;
    for (long i = 1; i < n; i++) {
       // i^2 = (i-1)^2 + 2*i-1
       i_sqr = (i_sqr + 2*i - 1) % (2*n);
-      double angle = -((2 * M_PI) * (double(i_sqr)/double(2*n)));
-      powers[i] = std::polar(1.0, angle);
+      ldbl angle = -((2 * pi) * (ldbl(i_sqr)/ldbl(2*n)));
+      powers[i] = cmplx_t(cos(angle), sin(angle));
    }
 
    long N = 1L << k;
@@ -769,8 +788,8 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
    for (long i = 1; i < n; i++) {
       // i^2 = (i-1)^2 + 2*i-1
       i_sqr = (i_sqr + 2*i - 1) % (2*n);
-      double angle = (2 * M_PI) * (double(i_sqr)/double(2*n));
-      Rb[n-1+i] = Rb[n-1-i] = std::polar(1.0, angle);
+      ldbl angle = (2 * pi) * (ldbl(i_sqr)/ldbl(2*n));
+      Rb[n-1+i] = Rb[n-1-i] = cmplx_t(cos(angle), sin(angle));
    }
   
    new_fft(&Rb[0], k, tab);
@@ -779,7 +798,6 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 
 }
 
-static cmplx_t check_sum = 0;
 
 static long
 bluestein_comp(vector<cmplx_t>& a, 
@@ -808,9 +826,280 @@ bluestein_comp(vector<cmplx_t>& a,
    for (long i = 0; i < n; i++) 
       a[i] = x[n-1+i] * powers[i] * Ninv; 
 
-   check_sum += a[0];
+}
+
+
+
+
+static long
+bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb, 
+                  vector<vector<cmplx_t>>& tab)
+{
+   // k = least k such that 2^k >= 2*n-1
+   long k = 0;
+   while ((1L << k) < 2*n-1) k++;
+
+   compute_table(tab, k);
+
+   const ldbl pi = atan(ldbl(1)) * 4.0;
+
+   powers.resize(n);
+   powers[0] = 1;
+   long i_sqr = 0;
+   for (long i = 1; i < n; i++) {
+      // i^2*((n+1)/2) = (i-1)^2*((n+1)/2) + i + ((n-1)/2) (mod n)
+      i_sqr = (i_sqr + i + (n-1)/2) % n;
+      ldbl angle = -((2 * pi) * (ldbl(i_sqr)/ldbl(n)));
+      powers[i] = cmplx_t(cos(angle), sin(angle));
+   }
+
+   long N = 1L << k;
+   Rb.resize(N);
+   for (long i = 0; i < N; i++) Rb[i] = 0;
+
+   Rb[0] = 1;
+   i_sqr = 0;
+   for (long i = 1; i < n; i++) {
+      // i^2*((n+1)/2) = (i-1)^2*((n+1)/2) + i + ((n-1)/2) (mod n)
+      i_sqr = (i_sqr + i + (n-1)/2) % n;
+      ldbl angle = (2 * pi) * (ldbl(i_sqr)/ldbl(n));
+      Rb[i] = cmplx_t(cos(angle), sin(angle));
+   }
+  
+   new_fft(&Rb[0], k, tab);
+
+   return k;
+
+}
+
+
+static long
+bluestein_comp1(vector<cmplx_t>& a, 
+                  long n, long k, const vector<cmplx_t>& powers, vector<cmplx_t>& Rb, 
+                  const vector<vector<cmplx_t>>& tab)
+{
+   long N = 1L << k;
+
+   vector<cmplx_t> x(N);
+
+   for (long i = 0; i < n; i++)
+      x[i] = a[i] * powers[i];
+
+   long len = FFTRoundUp(2*n-1, k);
+   long ilen = FFTRoundUp(n-1, k);
+
+   for (long i = n; i < ilen; i++)
+      x[i] = 0;
+
+   new_fft_short(&x[0], len, ilen, k, tab);
+
+   for (long i = 0; i < len; i++)
+      x[i] *= Rb[i];
+
+   new_ifft_short1(&x[0], len, k, tab);
+
+   double Ninv = 1/double(N);
+   
+   for (long i = 0; i < n-1; i++) 
+      a[i] = (x[i] + x[n+i]) * powers[i] * Ninv; 
+
+   a[n-1] = x[n-1] * powers[n-1] * Ninv;
+
+}
+
+
+
+
+//================== Fft ====================
+
+typedef complex<ldbl> lcx;
+
+namespace Fft {
+   
+   /* 
+    * Computes the discrete Fourier transform (DFT) of the given complex vector, storing the result back into the vector.
+    * The vector can have any length. This is a wrapper function.
+    */
+   void transform(std::vector<lcx> &vec);
+   
+   
+   /* 
+    * Computes the inverse discrete Fourier transform (IDFT) of the given complex vector, storing the result back into the vector.
+    * The vector can have any length. This is a wrapper function. This transform does not perform scaling, so the inverse is not a true inverse.
+    */
+   void inverseTransform(std::vector<lcx> &vec);
+   
+   
+   /* 
+    * Computes the discrete Fourier transform (DFT) of the given complex vector, storing the result back into the vector.
+    * The vector's length must be a power of 2. Uses the Cooley-Tukey decimation-in-time radix-2 algorithm.
+    */
+   void transformRadix2(std::vector<lcx> &vec);
+   
+   
+   /* 
+    * Computes the discrete Fourier transform (DFT) of the given complex vector, storing the result back into the vector.
+    * The vector can have any length. This requires the convolution function, which in turn requires the radix-2 FFT function.
+    * Uses Bluestein's chirp z-transform algorithm.
+    */
+   void transformBluestein(std::vector<lcx> &vec);
+   
+   
+   /* 
+    * Computes the circular convolution of the given complex vectors. Each vector's length must be the same.
+    */
+   void convolve(
+      const std::vector<lcx> &vecx,
+      const std::vector<lcx> &vecy,
+      std::vector<lcx> &vecout);
    
 }
+
+
+
+using std::complex;
+using std::size_t;
+using std::vector;
+
+
+// Private function prototypes
+static size_t reverseBits(size_t x, int n);
+
+
+void Fft::transform(vector<lcx> &vec) {
+   size_t n = vec.size();
+   if (n == 0)
+      return;
+   else if ((n & (n - 1)) == 0)  // Is power of 2
+      transformRadix2(vec);
+   else  // More complicated algorithm for arbitrary sizes
+      transformBluestein(vec);
+}
+
+
+void Fft::inverseTransform(vector<lcx> &vec) {
+   std::transform(vec.cbegin(), vec.cend(), vec.begin(),
+      static_cast<lcx (*)(const lcx &)>(std::conj));
+   transform(vec);
+   std::transform(vec.cbegin(), vec.cend(), vec.begin(),
+      static_cast<lcx (*)(const lcx &)>(std::conj));
+}
+
+
+void Fft::transformRadix2(vector<lcx> &vec) {
+   // Length variables
+   size_t n = vec.size();
+   int levels = 0;  // Compute levels = floor(log2(n))
+   for (size_t temp = n; temp > 1U; temp >>= 1)
+      levels++;
+   if (static_cast<size_t>(1U) << levels != n)
+      throw std::domain_error("Length is not a power of 2");
+
+   const ldbl pi = atan(ldbl(1)) * 4.0;
+   
+   // Trignometric table
+   vector<lcx> expTable(n / 2);
+   for (size_t i = 0; i < n / 2; i++) {
+      // expTable[i] = std::exp(lcx(0, -2 * M_PI * i / n));
+      ldbl angle = -2 * pi * i / n;
+      expTable[i] = lcx(cos(angle), sin(angle));
+   }
+   
+   // Bit-reversed addressing permutation
+   for (size_t i = 0; i < n; i++) {
+      size_t j = reverseBits(i, levels);
+      if (j > i)
+         std::swap(vec[i], vec[j]);
+   }
+   
+   // Cooley-Tukey decimation-in-time radix-2 FFT
+   for (size_t size = 2; size <= n; size *= 2) {
+      size_t halfsize = size / 2;
+      size_t tablestep = n / size;
+      for (size_t i = 0; i < n; i += size) {
+         for (size_t j = i, k = 0; j < i + halfsize; j++, k += tablestep) {
+            lcx temp = vec[j + halfsize] * expTable[k];
+            vec[j + halfsize] = vec[j] - temp;
+            vec[j] += temp;
+         }
+      }
+      if (size == n)  // Prevent overflow in 'size *= 2'
+         break;
+   }
+}
+
+
+void Fft::transformBluestein(vector<lcx> &vec) {
+   // Find a power-of-2 convolution length m such that m >= n * 2 + 1
+   size_t n = vec.size();
+   size_t m = 1;
+   while (m / 2 <= n) {
+      if (m > SIZE_MAX / 2)
+         throw std::length_error("Vector too large");
+      m *= 2;
+   }
+
+   const ldbl pi = atan(ldbl(1)) * 4.0;
+   
+   // Trignometric table
+   vector<lcx> expTable(n);
+   for (size_t i = 0; i < n; i++) {
+      unsigned long long temp = static_cast<unsigned long long>(i) * i;
+      temp %= static_cast<unsigned long long>(n) * 2;
+      ldbl angle = pi * temp / n;
+      // Less accurate alternative if long long is unavailable: double angle = M_PI * i * i / n;
+      expTable[i] = lcx(cos(-angle), sin(-angle));
+   }
+   
+   // Temporary vectors and preprocessing
+   vector<lcx> av(m);
+   for (size_t i = 0; i < n; i++)
+      av[i] = vec[i] * expTable[i];
+   vector<lcx> bv(m);
+   bv[0] = expTable[0];
+   for (size_t i = 1; i < n; i++)
+      bv[i] = bv[m - i] = std::conj(expTable[i]);
+   
+   // Convolution
+   vector<lcx> cv(m);
+   convolve(av, bv, cv);
+   
+   // Postprocessing
+   for (size_t i = 0; i < n; i++)
+      vec[i] = cv[i] * expTable[i];
+}
+
+
+void Fft::convolve(
+      const vector<lcx> &xvec,
+      const vector<lcx> &yvec,
+      vector<lcx> &outvec) {
+   
+   size_t n = xvec.size();
+   if (n != yvec.size() || n != outvec.size())
+      throw std::domain_error("Mismatched lengths");
+   vector<lcx> xv = xvec;
+   vector<lcx> yv = yvec;
+   transform(xv);
+   transform(yv);
+   for (size_t i = 0; i < n; i++)
+      xv[i] *= yv[i];
+   inverseTransform(xv);
+   for (size_t i = 0; i < n; i++)  // Scaling (because this FFT implementation omits it)
+      outvec[i] = xv[i] / static_cast<ldbl>(n);
+}
+
+
+static size_t reverseBits(size_t x, int n) {
+   size_t result = 0;
+   for (int i = 0; i < n; i++, x >>= 1)
+      result = (result << 1) | (x & 1U);
+   return result;
+}
+
+
+
+//===========================================
 
 
 #define TIME_IT(t, action) \
@@ -825,6 +1114,9 @@ do { \
    } while ( _t1 - _t0 < 3 && (_iter *= 2)); \
    t = (_t1 - _t0)/_iter; \
 } while(0)
+
+
+static cmplx_t check_sum = 0;
 
 int main()
 {
@@ -859,25 +1151,45 @@ int main()
    for (int i = 0; i < n; i++)
       std::cout << v[i] << "\n";
 #elif 0
-   long n = 5;
+   //long n = 28679;
+   long n = 45551;
+   // long n = 17;
 
    vector<cmplx_t> v(n);
    for (int i = 0; i < n; i++)
-      v[i] = i*i+1;
+      v[i] = NTL::RandomBnd(20)-10;
+
+   vector<cmplx_t> v0(v);
+
 
    vector<cmplx_t> powers;
    vector<cmplx_t> Rb;
    vector<vector<cmplx_t>> tab;
 
-   long k = bluestein_precomp(n, powers, Rb, tab);
+   long k = bluestein_precomp1(n, powers, Rb, tab);
 
-   bluestein_comp(v, n, k, powers, Rb, tab);
+   bluestein_comp1(v, n, k, powers, Rb, tab);
 
+   vector<lcx> vv(n);
    for (int i = 0; i < n; i++)
-      std::cout << v[i] << "\n";
+      vv[i] = v0[i];
+
+   Fft::transform(vv);
+
+   ldbl max_err = 0;
+   for (int i = 0; i < n; i++) {
+      lcx val = v[i];
+      lcx diff = val - vv[i];
+      ldbl err = std::abs(diff)/std::abs(vv[i]);
+      if (err > max_err) max_err = err;
+   }
+
+   std::cout << log(max_err)/log(2.0) << "\n";
+   
+   
 #else
-   //long n = 28679;
-   long n = 45551;
+   long n = 28679;
+   // long n = 45551;
 
    vector<cmplx_t> v(n);
    for (long i = 0; i < n; i++)
@@ -892,7 +1204,7 @@ int main()
    long k = bluestein_precomp(n, powers, Rb, tab);
 
    double t;
-   TIME_IT(t, (v=w, bluestein_comp(v, n, k, powers, Rb, tab))); 
+   TIME_IT(t, (v=w, bluestein_comp(v, n, k, powers, Rb, tab), check_sum += v[0])); 
 
    std::cout << t << "\n";
    std::cout << check_sum << "\n";
