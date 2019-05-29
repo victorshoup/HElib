@@ -223,6 +223,8 @@ PAlgebra::PAlgebra(long mm, long pp,
 
   PhimX = Cyclotomic(mm); // compute and store Phi_m(X)
   //  pp_factorize(mFactors,mm); // prime-power factorization from NumbTh.cpp
+
+  fftInfo.set_ptr(new PGFFT(mm));
 }
 
 bool comparePAlgebra(const PAlgebra& palg,

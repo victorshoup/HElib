@@ -48,6 +48,7 @@
 #include "zzX.h"
 #include "clonedPtr.h"
 #include "hypercube.h"
+#include "PGFFT.h"
 
 //NTL_CLIENT
 
@@ -99,6 +100,9 @@ class PAlgebra {
                        // zmsIdx[t]==-1 if t notin Zm*
 
   std::vector<long> zmsRep; // inverse of zmsIdx
+
+  copied_ptr<PGFFT> fftInfo; // info for computing m-point complex FFT's
+                             // copied_ptr allows delayed initialization
 
  public:
 
@@ -241,6 +245,8 @@ class PAlgebra {
 
   //! The largest FFT we need to handle degree-m polynomials
   long fftSizeNeeded() const {return NTL::NextPowerOfTwo(getM()) +1;}
+
+  const PGFFT& getFFTInfo() const { return *fftInfo; }
 };
 
 
