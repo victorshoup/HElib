@@ -171,6 +171,13 @@ public:
   // NOTE: degBound is not used here, but I include it
   // for consistency with the other noiseBound routines
 
+
+  double noiseBoundForHWt(long hwt, long degBound) const
+  {
+    return scale * std::sqrt(double(hwt));
+  }
+
+
   //=======================================
 
   //! This computes a high probability bound on the L-infty norm
@@ -197,11 +204,6 @@ public:
     // multiply by this fudge factor
 
     return c_m * (0.5+ noiseBoundForUniform(0.5, skHwt*(1L << k)));
-  }
-
-  double noiseBoundForHWt(long hwt, long degBound) const
-  {
-    return scale * std::sqrt(double(hwt));
   }
 
   /**
