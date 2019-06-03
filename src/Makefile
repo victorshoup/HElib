@@ -164,7 +164,7 @@ obj: $(OBJ)
 #	$(CC) $(CFLAGS) -DDEBUG_PRINTOUT -c recryption.cpp
 
 #PGFFT.o: PGFFT.cpp
-#	$(CC) $(CFLAGS) -O3 -march=native -c PGFFT.cpp
+#	$(CC) $(CFLAGS) -march=native -c PGFFT.cpp
 
 
 %.o: %.cpp
