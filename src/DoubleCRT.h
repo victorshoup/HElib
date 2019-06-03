@@ -366,6 +366,7 @@ public:
 
   //! @brief Coefficients are -1/0/1 with pre-specified number of nonzeros
   double sampleHWt(long Hwt);
+  double sampleHWtBounded(long Hwt);
 
   //! @brief Coefficients are Gaussians
   //! Return a high probability bound on L-infty norm of canonical embedding

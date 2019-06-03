@@ -40,6 +40,7 @@ basicCanonicalEmbedding(std::vector<cx_double>& v,
 
   v.resize(phimBy2); // the first half of Zm*
 
+  // FIXME: need to document these two different strategies
   if (palg.getNSlots()==phimBy2) // order roots by the palg order
     for (long i=0; i<phimBy2; i++)
       v[phimBy2-i-1] = buf[palg.ith_rep(i)];

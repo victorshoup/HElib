@@ -236,209 +236,65 @@ double sampleHWt(zzX &poly, const FHEcontext& context, long Hwt)
 double sampleHWtBoundedEffectiveBound(const FHEcontext& context, long Hwt)
 {
   const PAlgebra& palg = context.zMStar;
-
-  long deg_bnd = (palg.getPow2() == 0) ? palg.getM() : palg.getPhiM();
-
-  long log_deg_bnd = long(log(double(deg_bnd))/log(2.0) + 0.5) + 1;
-  //  sqrt(2) * deg_bnd  <= 2^{log_deg_bnd} <= 2*sqrt(2) * deg_bnd
-
-  // we use log_deg_bnd as in index into the erfc_inverse table
-  // so that we get a noise bound that should be satisfied
-  // with probablity at least 1/sqrt(2).
-
-  //OLD: assert(log_deg_bnd < ERFC_INVERSE_SIZE);
-  helib::assertTrue(log_deg_bnd < ERFC_INVERSE_SIZE, "log_deg_bnd must be less than ERFC_INVERSE_SIZE");
-  double scale = erfc_inverse[log_deg_bnd];
-  double bound = scale * sqrt(double(Hwt));
-    
+  long phim = palg.getPhiM();
+  // should be good with probability at least 1/2
+  double bound = sqrt(Hwt*log(phim));
   return bound;
 }
 
-#if 1
 double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
 {
   double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
   const PAlgebra& palg = context.zMStar;
     
+#if 0
   double val;
   long count = 0;
   do {
     sampleHWt(poly, context, Hwt);
     val = embeddingLargestCoeff(poly,palg);
-    //cerr << "****** " << (val/bound) << "\n";
   }
   while (++count<1000 && val>bound); // repeat until <= bound
-
-  if (val>bound) {
-    std::stringstream ss;
-    ss << "Error: sampleSmallBounded, after "
-         << count<<" trials, still val="<<val
-         << '>'<<"bound="<<bound;
-    throw helib::RuntimeError(ss.str());
-  }
-  return bound;
-}
-
-#elif 0
-
-// Experimental version
-
-static ZZ 
-calculate_matrix_norm(const zzX& try_poly, const FHEcontext& context)
-{
-  const RecryptData& rcData = context.rcData;
-  const PowerfulDCRT* p2dConv = rcData.p2dConv;
-  const PAlgebra& palg = context.zMStar;
-  long phim = palg.getPhiM();
-  long m = palg.getM();
-  const ZZX& PhimX = palg.getPhimX();
-
-  ZZX poly;
-  convert(poly, try_poly);
-
-  IndexSet iset = IndexSet( context.ctxtPrimes.first(), 
-                            min( context.ctxtPrimes.first()+3, 
-                                context.ctxtPrimes.last() ) );
-  // use a smaller prime set for powerful conversions
-  // right now, we just use the first 3  ctxt primes
-   
-  ZZ retval {0};
-
-  for (long i: range(phim)) {
-    if (i%300 == 0) cerr << ".";
-    Vec<ZZ> basis_vec;
-    basis_vec.SetLength(phim);
-    basis_vec[i] = 1;
-
-    ZZX basis_poly;
-    p2dConv->powerfulToZZX(basis_poly, basis_vec, iset);
-
-    basis_poly = basis_poly*poly;
-
-    // reduce basis_poly mod X^m-1, which is enough for ZZXtoPowerful
-    long d = basis_poly.rep.length();
-
-    if (d > m) {
-      for (long j: range(m, d)) {
-        basis_poly.rep[j-m] += basis_poly.rep[j];
-      }
-      basis_poly.rep.SetLength(m);
-      basis_poly.normalize();
-    }
-    
-    p2dConv->ZZXtoPowerful(basis_vec, basis_poly, iset);
-
-    for (long j: range(phim)) {
-      retval += basis_vec[j]*basis_vec[j];
-    }
-  }
-
-  return retval;
-}
-
-double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
-{
-  double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
-  const PAlgebra& palg = context.zMStar;
-    
-
-  ZZ best_matrix_norm;
-  zzX best_poly;
-
-  cerr << "*** starting trials\n";
-
-  for (long trials = 0; trials < 20; trials++) {
-
-    zzX try_poly;
-
-    double val;
-    long count = 0;
-    do {
-      sampleHWt(try_poly, context, Hwt);
-      val = embeddingLargestCoeff(try_poly,palg);
-      //cerr << "****** " << (val/bound) << "\n";
-    }
-    while (++count<1000 && val>bound); // repeat until <= bound
-
-    if (val>bound) {
-      std::stringstream ss;
-      ss << "Error: sampleSmallBounded, after "
-	   << count<<" trials, still val="<<val
-	   << '>'<<"bound="<<bound;
-      throw helib::RuntimeError(ss.str());
-    }
-
-    ZZ try_matrix_norm = calculate_matrix_norm(try_poly, context);
-
-    if (trials == 0 || try_matrix_norm < best_matrix_norm) {
-      best_matrix_norm = try_matrix_norm;
-      best_poly = try_poly; 
-    }
-
-    cerr << try_matrix_norm << "\n";
-  }
-
-  cerr << "*** ending trials\n";
-
-  return bound;
-}
-
 #else
+  double val, val1;
+  zzX poly1;
+  long succ = 0;
 
-void sampleHWtAlt(zzX& poly, const FHEcontext& context, long Hwt)
-{
-  const RecryptData& rcData = context.rcData;
-  const PowerfulDCRT* p2dConv = rcData.p2dConv;
-  const PAlgebra& palg = context.zMStar;
-  long phim = palg.getPhiM();
-  long m = palg.getM();
+  long count = 100;
 
-  Vec<ZZ> pwrfl;
-  pwrfl.SetLength(phim);
+  val = 1e9;
 
-  for (long i=0; i<Hwt; ) {  // continue until exactly Hwt nonzero coefficients
-    long u = RandomBnd(phim);  // The next coefficient to choose
-    if (pwrfl[u]==0) { // if we didn't choose it already
-      long b = RandomBits_long(2)&2; // b random in {0,2}
-      pwrfl[u] = b-1;                      //   random in {-1,1}
-      i++; // count another nonzero coefficient
+  cout << "sampleHWtBounded:\n";
+
+  for (long i = 0; i < count; i++) {
+    sampleHWt(poly1, context, Hwt);
+    val1 = embeddingLargestCoeff(poly1, palg);
+    if (val1 <= bound) {
+      succ++;
+      val = val1;
+      poly = poly1;
+      cout << "*";
+    }
+    else {
+      cout << ".";
     }
   }
 
-  ZZX poly1;
-  p2dConv->powerfulToZZX(poly1, pwrfl);
-
-  convert(poly, poly1);
-}
-
-// Experimental version
-
-double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
-{
-  double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
-  const PAlgebra& palg = context.zMStar;
-    
-  double val;
-  long count = 0;
-  do {
-    sampleHWtAlt(poly, context, Hwt);
-    val = embeddingLargestCoeff(poly,palg);
-    //cerr << "****** " << (val/bound) << "\n";
-  }
-  while (++count<1000 && val>bound); // repeat until <= bound
-
-  if (val>bound) {
-    std::stringstream ss;
-    ss << "Error: sampleSmallBounded, after "
-         << count<<" trials, still val="<<val
-         << '>'<<"bound="<<bound;
-    throw helib::RuntimeError(ss.str());
-  }
-  return bound;
-}
-
+  cout << "\nsucc%=" << ((double(succ)/count)*100) << "\n";
+  cout << "bound=" << bound << "\n";
+  cout << "Hwt=" << Hwt  << "\n";
 
 #endif
+
+  if (val>bound) {
+    std::stringstream ss;
+    ss << "Error: sampleHWtBounded, after "
+         << count<<" trials, still val="<<val
+         << '>'<<"bound="<<bound;
+    throw helib::RuntimeError(ss.str());
+  }
+  return bound;
+}
 
 
 double sampleSmall(zzX &poly, const FHEcontext& context)
@@ -471,8 +327,11 @@ double sampleSmallBounded(zzX &poly, const FHEcontext& context)
   const PAlgebra& palg = context.zMStar;
   long m = palg.getM();
   long phim = palg.getPhiM();
-  // experimental bound, Pr[l-infty(canonical-embedding)>bound]<5%
-  double bound = (1+sqrt(phim*log(phim)))*0.85;
+
+  // should be good with probability at least 1/2
+  double bound = sqrt(phim*log(phim))*0.71;
+
+#if 0
   double val;
   long count = 0;
   do {
@@ -480,6 +339,37 @@ double sampleSmallBounded(zzX &poly, const FHEcontext& context)
     val = embeddingLargestCoeff(poly,palg);
   }
   while (++count<1000 && val>bound); // repeat until <= bound
+#else
+  double val, val1;
+  zzX poly1;
+  long succ = 0;
+
+  long count = 100;
+
+  val = 1e9;
+
+  cout << "sampleSmallBounded:\n";
+
+  for (long i = 0; i < count; i++) {
+    sampleSmall(poly1, context);
+    val1 = embeddingLargestCoeff(poly1, palg);
+    if (val1 <= bound) {
+      succ++;
+      val = val1;
+      poly = poly1;
+      cout << "*";
+    }
+    else {
+      cout << ".";
+    }
+  }
+
+  cout << "\nsucc%=" << ((double(succ)/count)*100) << "\n";
+  cout << "bound=" << bound << "\n";
+
+
+#endif
+
   if (val>bound) {
     std::stringstream ss;
     ss << "Error: sampleSmallBounded, after "

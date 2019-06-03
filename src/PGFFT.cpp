@@ -19,12 +19,15 @@
 #include "PGFFT.h"
 #include <cassert>
 
+//#include <iostream>
+
 
 using std::vector;
 using std::complex;
 
 typedef complex<double> cmplx_t;
 typedef long double ldbl;
+//typedef double ldbl;
 
 #if (PGFFT_USE_EXPLICIT_MUL)
 
@@ -1034,6 +1037,8 @@ PGFFT::PGFFT(long n_)
    n = n_;
 
    strategy = choose_strategy(n);
+
+   //std::cout << strategy << "\n";
 
    switch (strategy) {
 

@@ -179,7 +179,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
  
   }
 
-  printAllTimers();
+  //printAllTimers();
 
   if (!noPrint) CheckCtxt(c2, "after recryption");
 

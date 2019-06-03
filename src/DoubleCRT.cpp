@@ -1104,6 +1104,15 @@ double DoubleCRT::sampleHWt(long Hwt)
   return retval;
 }
 
+// Coefficients are -1/0/1 with pre-specified number of nonzeros
+double DoubleCRT::sampleHWtBounded(long Hwt)
+{
+  zzX poly;
+  double retval = ::sampleHWtBounded(poly,context,Hwt);
+  *this = poly; // convert to DoubleCRT
+  return retval;
+}
+
 // Coefficients are Gaussians
 double DoubleCRT::sampleGaussian(double stdev)
 {
