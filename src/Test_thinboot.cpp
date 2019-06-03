@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
   long c=3;
   long L=600;
   long N=0;
-  long t=0;
+  long t=64;
   long nthreads=1;
 
   long seed=0;
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
 
   amap.arg("c", c, "number of columns in the key-switching matrices");
   amap.arg("L", L, "# of levels in the modulus chain");
-  amap.arg("t", t, "Hamming weight of recryption secret key", "heuristic");
+  amap.arg("t", t, "Hamming weight of recryption secret key");
   amap.arg("dry", dry, "dry=1 for a dry-run");
   amap.arg("nthreads", nthreads, "number of threads");
   amap.arg("seed", seed, "random number seed");

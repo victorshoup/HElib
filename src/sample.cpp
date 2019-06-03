@@ -247,7 +247,7 @@ double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
   double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
   const PAlgebra& palg = context.zMStar;
     
-#if 0
+#if 1
   double val;
   long count = 0;
   do {
@@ -331,7 +331,7 @@ double sampleSmallBounded(zzX &poly, const FHEcontext& context)
   // should be good with probability at least 1/2
   double bound = sqrt(phim*log(phim))*0.71;
 
-#if 0
+#if 1
   double val;
   long count = 0;
   do {
