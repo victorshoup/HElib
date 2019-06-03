@@ -235,7 +235,6 @@ double sampleHWt(zzX &poly, const FHEcontext& context, long Hwt)
 
 double sampleHWtBoundedEffectiveBound(const FHEcontext& context, long Hwt)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   const PAlgebra& palg = context.zMStar;
 
   long deg_bnd = (palg.getPow2() == 0) ? palg.getM() : palg.getPhiM();
@@ -253,26 +252,11 @@ double sampleHWtBoundedEffectiveBound(const FHEcontext& context, long Hwt)
   double bound = scale * sqrt(double(Hwt));
     
   return bound;
-#else
-  const PAlgebra& palg = context.zMStar;
-  double retval;
-
-  if (palg.getPow2() == 0) { // not power of two
-    long m = palg.getM();
-    retval = context.noiseBoundForHWt(Hwt, m);
-  }
-  else { // power of two
-    long phim = palg.getPhiM();
-    retval = context.noiseBoundForHWt(Hwt, phim);
-  }
-  return retval;
-#endif
 }
 
 #if 1
 double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
   const PAlgebra& palg = context.zMStar;
     
@@ -293,10 +277,6 @@ double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
     throw helib::RuntimeError(ss.str());
   }
   return bound;
-#else
-  return sampleHWt(poly, context, Hwt);
-#endif
-   
 }
 
 #elif 0
@@ -358,7 +338,6 @@ calculate_matrix_norm(const zzX& try_poly, const FHEcontext& context)
 
 double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
   const PAlgebra& palg = context.zMStar;
     
@@ -402,10 +381,6 @@ double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
   cerr << "*** ending trials\n";
 
   return bound;
-#else
-  return sampleHWt(poly, context, Hwt);
-#endif
-   
 }
 
 #else
@@ -440,7 +415,6 @@ void sampleHWtAlt(zzX& poly, const FHEcontext& context, long Hwt)
 
 double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   double bound = sampleHWtBoundedEffectiveBound(context, Hwt);
   const PAlgebra& palg = context.zMStar;
     
@@ -461,10 +435,6 @@ double sampleHWtBounded(zzX &poly, const FHEcontext& context, long Hwt)
     throw helib::RuntimeError(ss.str());
   }
   return bound;
-#else
-  return sampleHWt(poly, context, Hwt);
-#endif
-   
 }
 
 
@@ -498,7 +468,6 @@ double sampleSmall(zzX &poly, const FHEcontext& context)
 // Same as above, but ensure the result is not too much larger than typical
 double sampleSmallBounded(zzX &poly, const FHEcontext& context)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   const PAlgebra& palg = context.zMStar;
   long m = palg.getM();
   long phim = palg.getPhiM();
@@ -519,10 +488,6 @@ double sampleSmallBounded(zzX &poly, const FHEcontext& context)
     throw helib::RuntimeError(ss.str());
   }
   return bound;
-#else
-#warning "No FFT, sampleSmallBounded degenerates to sampleSmall"
-  return sampleSmall(poly, context);
-#endif
 }
 
 double sampleGaussian(zzX &poly, const FHEcontext& context, double stdev)
@@ -547,7 +512,6 @@ double sampleGaussian(zzX &poly, const FHEcontext& context, double stdev)
 // Same as above, but ensure the result is not too much larger than typical
 double sampleGaussianBounded(zzX &poly, const FHEcontext& context, double stdev)
 {
-#if FFT_IMPL // is there any implementation of canonicalEmbedding?
   const PAlgebra& palg = context.zMStar;
   long m = palg.getM();
   long phim = palg.getPhiM();  
@@ -570,10 +534,6 @@ double sampleGaussianBounded(zzX &poly, const FHEcontext& context, double stdev)
     throw helib::RuntimeError(ss.str());
   }
   return bound;
-#else
-#warning "No FFT, sampleGaussianBounded degenerates to sampleGaussian"
-  return sampleGaussian(poly, context, stdev);
-#endif
 }
 
 

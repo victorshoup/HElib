@@ -71,31 +71,12 @@ inline NTL::xdouble coeffsL2Norm(const NTL::ZZX& f) // l2 norm
 inline NTL::xdouble coeffsL2Norm(const DoubleCRT& f) // l2 norm
 { return sqrt(coeffsL2NormSquared(f)); }
 
-// Choosing between implementations 
-#if defined(FFT_NATIVE) || defined(FFT_ARMA)
-#define FFT_IMPL 1
-#else
-#define FFT_IMPL 0 // no implementation of FFT
-#endif
-
 typedef std::complex<double> cx_double;
-typedef std::complex<NTL::xdouble> cx_xdouble;
-typedef std::complex<long double> cx_ldouble;
 
-#if FFT_IMPL
-//! Computing the L2 norm of the canonical embedding
-double embeddingL2NormSquared(const zzX& f, const PAlgebra& palg);
-inline double embeddingL2Norm(const zzX& f, const PAlgebra& palg)
-{ return sqrt(embeddingL2NormSquared(f,palg)); }
 
 //! Computing the L-infinity norm of the canonical embedding
 double embeddingLargestCoeff(const zzX& f, const PAlgebra& palg);
-double embeddingLargestCoeff(const NTL::Vec<double>& f, const PAlgebra& palg);
-
-// Same as above, for ZZX
-NTL::xdouble embeddingL2NormSquared(const NTL::ZZX& f, const PAlgebra& palg);
-inline NTL::xdouble embeddingL2Norm(const NTL::ZZX& f, const PAlgebra& palg)
-{ return sqrt(embeddingL2NormSquared(f,palg)); }
+double embeddingLargestCoeff(const std::vector<double>& f, const PAlgebra& palg);
 NTL::xdouble embeddingLargestCoeff(const NTL::ZZX& f, const PAlgebra& palg);
 
 //! Computing the canonical embedding (in fft.cpp). This function
@@ -108,7 +89,7 @@ void canonicalEmbedding(std::vector<cx_double>& v,
                         const NTL::ZZX& f, const PAlgebra& palg);
 
 void canonicalEmbedding(std::vector<cx_double>& v,
-                        const NTL::Vec<double>& f, const PAlgebra& palg);
+                        const std::vector<double>& f, const PAlgebra& palg);
 
 //! Roughly the inverse of canonicalEmbedding, except for scaling and rounding issues
 void embedInSlots(zzX& f, const std::vector<cx_double>& v,
@@ -120,6 +101,5 @@ void embedInSlots(zzX& f, const std::vector<cx_double>& v,
 // but embedInSlots(f,v,palg,1.0,strictInverse=false) may fail to recover
 // the same f.
 
-#endif // FFT_IMPL
 
 #endif // ifndef HELIB_NORMS_H

@@ -412,12 +412,12 @@ void Ctxt::modDownToSet(const IndexSet &s)
     ZZX delta;
     ZZ diff = context.productOfPrimes(setDiff);
     xdouble xdiff = conv<xdouble>(diff);
-    Vec<double> fdelta;
+    vector<double> fdelta;
     xdouble addedNoise(0.0);
 
     for (auto &part : parts) {
       part.scaleDownToSet(intersection, ptxtSpace, delta);
-      fdelta.SetLength(delta.rep.length());
+      fdelta.resize(delta.rep.length());
       for (long j: range(delta.rep.length()))
         fdelta[j] = conv<double>( conv<xdouble>(delta.rep[j])/xdiff );
 

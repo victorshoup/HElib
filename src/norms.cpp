@@ -90,17 +90,6 @@ xdouble coeffsL2NormSquared(const DoubleCRT& f) // l2 norm^2
   return coeffsL2NormSquared(poly);
 }
 
-#if FFT_IMPL
-// l_2 norm square of canonical embedding
-double embeddingL2NormSquared(const zzX& f, const PAlgebra& palg)
-{
-  std::vector<cx_double> emb;
-  canonicalEmbedding(emb, f, palg);
-  double acc = 0.0;
-  for (auto& x : emb)
-    acc += std::norm(x);
-  return 2*acc; // emb just has phi(m)/2 values (paired with complex conjugates)
-}
 
 //! Computing the L-infinity norm of the canonical embedding
 double embeddingLargestCoeff(const zzX& f, const PAlgebra& palg)
@@ -115,7 +104,7 @@ double embeddingLargestCoeff(const zzX& f, const PAlgebra& palg)
   return sqrt(mx);
 }
 
-double embeddingLargestCoeff(const Vec<double>& f, const PAlgebra& palg)
+double embeddingLargestCoeff(const std::vector<double>& f, const PAlgebra& palg)
 {
   FHE_NTIMER_START(AAA_embeddingLargest);
   std::vector<cx_double> emb;
@@ -173,22 +162,12 @@ static xdouble convertAndScale(ZZX& ff, const NTL::ZZX& f)
   return factor;
 }
 
-xdouble embeddingL2NormSquared(const NTL::ZZX& f, const PAlgebra& palg)
-{
-  zzX ff; // to hold a scaled-down version of ff;
-  xdouble factor = convertAndScale(ff, f);
-  return embeddingL2NormSquared(ff, palg)*factor*factor;
-}
 
 xdouble embeddingLargestCoeff(const NTL::ZZX& f, const PAlgebra& palg)
 {
-#if 1
   ZZX ff; // to hold a scaled-down version of ff;
   xdouble factor = convertAndScale(ff, f);
-#else
-  const ZZX& ff = f;
-  xdouble factor { 1.0 };
-#endif
+
   std::vector<cx_double> emb;
   canonicalEmbedding(emb, ff, palg);
   xdouble mx {0.0};
@@ -200,4 +179,3 @@ xdouble embeddingLargestCoeff(const NTL::ZZX& f, const PAlgebra& palg)
   }
   return sqrt(mx)*factor;
 }
-#endif

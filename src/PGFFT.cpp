@@ -1,19 +1,53 @@
 
-#include "PGFFT.h"
-
-#include <cassert>
-
-
-
 // set to 0 to disable the truncated Bluestein
 #define PGFFT_USE_TRUNCATED_BLUE (1)
+
+// Set to 0 to disable explict complex multiplication.
+// The built-in complex multiplication routines are 
+// incredibly slow, because the standard requires special handling
+// of non-finite complex values.
+// To fix the problem, by default, PGFFT will override these routines
+// with explicitly defined multiplication functions. 
+// Another way to solve this problem is to compile with the -ffast-math
+// option (at least, on gcc, that's the right flag).
+#define PGFFT_USE_EXPLICIT_MUL (1)
+
+
+//============================================
+
+
+#include "PGFFT.h"
+#include <cassert>
+
 
 using std::vector;
 using std::complex;
 
 typedef complex<double> cmplx_t;
-
 typedef long double ldbl;
+
+#if (PGFFT_USE_EXPLICIT_MUL)
+
+static inline cmplx_t 
+MUL(cmplx_t a, cmplx_t b)
+{
+   double x = a.real(), y = a.imag(), u = b.real(), v = b.imag();
+   return cmplx_t(x*u-y*v, x*v+y*u);
+}
+
+static inline cmplx_t 
+CMUL(cmplx_t a, cmplx_t b)
+{
+   double x = a.real(), y = a.imag(), u = b.real(), v = b.imag();
+   return cmplx_t(x*u+y*v, y*u-x*v);
+}
+
+#else
+
+#define MUL(a, b) ((a) * (b))
+#define CMUL(a, b) ((a) * std::conj(b))
+
+#endif
 
 
 #if (defined(__GNUC__) && (__GNUC__ >= 4))
@@ -193,7 +227,7 @@ do \
    cmplx_t x1_ = xx1; \
    cmplx_t t_  = x0_ -  x1_; \
    xx0 = x0_ + x1_; \
-   xx1 = t_ * w; \
+   xx1 = MUL(t_, w); \
 }  \
 while (0)
 
@@ -262,7 +296,7 @@ new_fft_last_two_layers(cmplx_t* xp, long blocks, const cmplx_t* wtab)
       cmplx_t v2 = u0 - u2;
       cmplx_t v1 = u1 + u3; 
       cmplx_t t  = u1 - u3; 
-      cmplx_t v3 = t * w;
+      cmplx_t v3 = MUL(t, w);
 
       xp[0] = v0 + v1;
       xp[1] = v0 - v1;
@@ -356,7 +390,7 @@ void new_fft_short(cmplx_t* xp, long yn, long xn, long lgN,
 	{
 	  // X -> (X, w*X)
 	  for (long j = 0; j < xn; j++)
-	    xp1[j] = xp0[j] * wtab[j];
+	    xp1[j] = MUL(xp0[j], wtab[j]);
 
 	  new_fft_short(xp0, half, xn, lgN - 1, tab);
 	  new_fft_short(xp1, yn, xn, lgN - 1, tab);
@@ -380,7 +414,7 @@ void new_fft_short(cmplx_t* xp, long yn, long xn, long lgN,
 
 	  // X -> (X, w*X)
 	  for (long j = xn; j < half; j++)
-	    xp1[j] = xp0[j] * wtab[j];
+	    xp1[j] = MUL(xp0[j], wtab[j]);
 
 	  new_fft_short(xp0, half, half, lgN - 1, tab);
 	  new_fft_short(xp1, yn, half, lgN - 1, tab);
@@ -408,24 +442,24 @@ do   \
 } while (0)
 
 
-#define inv_butterfly_neg(xx0, xx1, w)  \
+#define inv_butterfly(xx0, xx1, w)  \
 do  \
 {  \
    cmplx_t x0_ = xx0;  \
    cmplx_t x1_ = xx1;  \
-   cmplx_t t_ = x1_ * w;  \
-   xx0 = x0_ - t_; /* NEG */   \
-   xx1 = x0_ + t_; /* NEG */   \
+   cmplx_t t_ = CMUL(x1_, w);  \
+   xx0 = x0_ + t_;  \
+   xx1 = x0_ - t_;  \
 } while (0)
 
 
 // requires size divisible by 8
 static void
-new_ifft_layer(cmplx_t* xp, long blocks, long size, const cmplx_t* wtab)
+new_ifft_layer(cmplx_t* xp, long blocks, long size, 
+               const cmplx_t* PGFFT_RESTRICT wtab)
 {
 
   size /= 2;
-  const cmplx_t* PGFFT_RESTRICT wtab1 = wtab + size;
 
   do
     {
@@ -436,16 +470,16 @@ new_ifft_layer(cmplx_t* xp, long blocks, long size, const cmplx_t* wtab)
 
       // first 4 butterflies
       inv_butterfly0(xp0[0], xp1[0]);
-      inv_butterfly_neg(xp0[1], xp1[1], wtab1[-1]);
-      inv_butterfly_neg(xp0[2], xp1[2], wtab1[-2]);
-      inv_butterfly_neg(xp0[3], xp1[3], wtab1[-3]);
+      inv_butterfly(xp0[1], xp1[1], wtab[1]);
+      inv_butterfly(xp0[2], xp1[2], wtab[2]);
+      inv_butterfly(xp0[3], xp1[3], wtab[3]);
 
       // 4-way unroll
       for (long j = 4; j < size; j+= 4) {
-         inv_butterfly_neg(xp0[j+0], xp1[j+0], wtab1[-(j+0)]);
-         inv_butterfly_neg(xp0[j+1], xp1[j+1], wtab1[-(j+1)]);
-         inv_butterfly_neg(xp0[j+2], xp1[j+2], wtab1[-(j+2)]);
-         inv_butterfly_neg(xp0[j+3], xp1[j+3], wtab1[-(j+3)]);
+         inv_butterfly(xp0[j+0], xp1[j+0], wtab[j+0]);
+         inv_butterfly(xp0[j+1], xp1[j+1], wtab[j+1]);
+         inv_butterfly(xp0[j+2], xp1[j+2], wtab[j+2]);
+         inv_butterfly(xp0[j+3], xp1[j+3], wtab[j+3]);
       }
 
       xp += 2 * size;
@@ -470,12 +504,12 @@ new_ifft_first_two_layers(cmplx_t* xp, long blocks, const cmplx_t* wtab)
       cmplx_t v1 = u0 - u1;
       cmplx_t v2 = u2 + u3;
       cmplx_t t  = u2 - u3;
-      cmplx_t v3 = t * w;
+      cmplx_t v3 = CMUL(t, w);
 
       xp[0] = v0 + v2;
       xp[2] = v0 - v2;
-      xp[1] = v1 - v3;  // NEG
-      xp[3] = v1 + v3;  // NEG
+      xp[1] = v1 + v3; 
+      xp[3] = v1 - v3; 
 
       xp += 4;
     }
@@ -556,25 +590,23 @@ void new_ifft_short1(cmplx_t* xp, long yn, long lgN, const vector<vector<cmplx_t
 	{
 	  cmplx_t x0 = xp0[j];
 	  xp0[j] = 2.0 * x0;
-	  xp1[j] = x0 * wtab[j];
+	  xp1[j] = MUL(x0, wtab[j]);
 	}
 
       new_ifft_short2(xp1, yn, lgN - 1, tab);
 
       // (X, Y) -> (X + Y/w, X - Y/w)
       {
-	const cmplx_t* PGFFT_RESTRICT wtab1 = wtab + half;
-
 	// DIRT: assumes yn is a multiple of 4
 	inv_butterfly0(xp0[0], xp1[0]);
-	inv_butterfly_neg(xp0[1], xp1[1], wtab1[-1]);
-	inv_butterfly_neg(xp0[2], xp1[2], wtab1[-2]);
-	inv_butterfly_neg(xp0[3], xp1[3], wtab1[-3]);
+	inv_butterfly(xp0[1], xp1[1], wtab[1]);
+	inv_butterfly(xp0[2], xp1[2], wtab[2]);
+	inv_butterfly(xp0[3], xp1[3], wtab[3]);
 	for (long j = 4; j < yn; j+=4) {
-	  inv_butterfly_neg(xp0[j+0], xp1[j+0], wtab1[-(j+0)]);
-	  inv_butterfly_neg(xp0[j+1], xp1[j+1], wtab1[-(j+1)]);
-	  inv_butterfly_neg(xp0[j+2], xp1[j+2], wtab1[-(j+2)]);
-	  inv_butterfly_neg(xp0[j+3], xp1[j+3], wtab1[-(j+3)]);
+	  inv_butterfly(xp0[j+0], xp1[j+0], wtab[j+0]);
+	  inv_butterfly(xp0[j+1], xp1[j+1], wtab[j+1]);
+	  inv_butterfly(xp0[j+2], xp1[j+2], wtab[j+2]);
+	  inv_butterfly(xp0[j+3], xp1[j+3], wtab[j+3]);
 	}
       }
     }
@@ -635,25 +667,23 @@ void new_ifft_short2(cmplx_t* xp, long yn, long lgN, const vector<vector<cmplx_t
 	  cmplx_t x1 = xp1[j];
 	  cmplx_t u = x0 - x1;
 	  xp0[j] = x0 + u;
-	  xp1[j] = u * wtab[j];
+	  xp1[j] = MUL(u, wtab[j]);
 	}
 
       new_ifft_short2(xp1, yn, lgN - 1, tab);
 
       // (X, Y) -> (X + Y/w, X - Y/w)
       {
-	const cmplx_t* PGFFT_RESTRICT wtab1 = wtab + half;
-
 	// DIRT: assumes yn is a multiple of 4
 	inv_butterfly0(xp0[0], xp1[0]);
-	inv_butterfly_neg(xp0[1], xp1[1], wtab1[-1]);
-	inv_butterfly_neg(xp0[2], xp1[2], wtab1[-2]);
-	inv_butterfly_neg(xp0[3], xp1[3], wtab1[-3]);
+	inv_butterfly(xp0[1], xp1[1], wtab[1]);
+	inv_butterfly(xp0[2], xp1[2], wtab[2]);
+	inv_butterfly(xp0[3], xp1[3], wtab[3]);
 	for (long j = 4; j < yn; j+=4) {
-	  inv_butterfly_neg(xp0[j+0], xp1[j+0], wtab1[-(j+0)]);
-	  inv_butterfly_neg(xp0[j+1], xp1[j+1], wtab1[-(j+1)]);
-	  inv_butterfly_neg(xp0[j+2], xp1[j+2], wtab1[-(j+2)]);
-	  inv_butterfly_neg(xp0[j+3], xp1[j+3], wtab1[-(j+3)]);
+	  inv_butterfly(xp0[j+0], xp1[j+0], wtab[j+0]);
+	  inv_butterfly(xp0[j+1], xp1[j+1], wtab[j+1]);
+	  inv_butterfly(xp0[j+2], xp1[j+2], wtab[j+2]);
+	  inv_butterfly(xp0[j+3], xp1[j+3], wtab[j+3]);
 	}
       }
     }
@@ -682,7 +712,7 @@ compute_table(vector<vector<cmplx_t>>& tab, long k)
     tab[s].resize(m/2);
     for (long j = 0; j < m/2; j++) {
       ldbl angle = -((2 * pi) * (ldbl(j)/ldbl(m)));
-      tab[s][j] = cmplx_t(cos(angle), sin(angle));
+      tab[s][j] = cmplx_t(std::cos(angle), std::sin(angle));
     }
   }
 }
@@ -820,7 +850,7 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
       // i^2 = (i-1)^2 + 2*i-1
       i_sqr = (i_sqr + 2*i - 1) % (2*n);
       ldbl angle = -((2 * pi) * (ldbl(i_sqr)/ldbl(2*n)));
-      powers[i] = cmplx_t(cos(angle), sin(angle));
+      powers[i] = cmplx_t(std::cos(angle), std::sin(angle));
    }
 
    long N = 1L << k;
@@ -833,7 +863,7 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
       // i^2 = (i-1)^2 + 2*i-1
       i_sqr = (i_sqr + 2*i - 1) % (2*n);
       ldbl angle = (2 * pi) * (ldbl(i_sqr)/ldbl(2*n));
-      Rb[n-1+i] = Rb[n-1-i] = cmplx_t(cos(angle), sin(angle));
+      Rb[n-1+i] = Rb[n-1-i] = cmplx_t(std::cos(angle), std::sin(angle));
    }
   
    new_fft(&Rb[0], k, tab);
@@ -896,7 +926,7 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 	 // i^2 = (i-1)^2 + 2*i-1
 	 i_sqr = (i_sqr + 2*i - 1) % (2*n);
 	 ldbl angle = -((2 * pi) * (ldbl(i_sqr)/ldbl(2*n)));
-	 powers[i] = cmplx_t(cos(angle), sin(angle));
+	 powers[i] = cmplx_t(std::cos(angle), std::sin(angle));
       }
    }
    else {
@@ -904,7 +934,7 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 	 // i^2*((n+1)/2) = (i-1)^2*((n+1)/2) + i + ((n-1)/2) (mod n)
 	 i_sqr = (i_sqr + i + (n-1)/2) % n;
 	 ldbl angle = -((2 * pi) * (ldbl(i_sqr)/ldbl(n)));
-	 powers[i] = cmplx_t(cos(angle), sin(angle));
+	 powers[i] = cmplx_t(std::cos(angle), std::sin(angle));
       }
    }
 
@@ -920,7 +950,7 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 	 // i^2 = (i-1)^2 + 2*i-1
 	 i_sqr = (i_sqr + 2*i - 1) % (2*n);
 	 ldbl angle = (2 * pi) * (ldbl(i_sqr)/ldbl(2*n));
-	 Rb[i] = cmplx_t(cos(angle), sin(angle));
+	 Rb[i] = cmplx_t(std::cos(angle), std::sin(angle));
       }
    }
    else {
@@ -928,7 +958,7 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 	 // i^2*((n+1)/2) = (i-1)^2*((n+1)/2) + i + ((n-1)/2) (mod n)
 	 i_sqr = (i_sqr + i + (n-1)/2) % n;
 	 ldbl angle = (2 * pi) * (ldbl(i_sqr)/ldbl(n));
-	 Rb[i] = cmplx_t(cos(angle), sin(angle));
+	 Rb[i] = cmplx_t(std::cos(angle), std::sin(angle));
       }
    }
   

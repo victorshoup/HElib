@@ -165,7 +165,7 @@ void Fft::transformRadix2(vector<lcx> &vec) {
    for (size_t i = 0; i < n / 2; i++) {
       // expTable[i] = std::exp(lcx(0, -2 * M_PI * i / n));
       ldbl angle = -2 * pi * i / n;
-      expTable[i] = lcx(cos(angle), sin(angle));
+      expTable[i] = lcx(std::cos(angle), std::sin(angle));
    }
    
    // Bit-reversed addressing permutation
@@ -211,7 +211,7 @@ void Fft::transformBluestein(vector<lcx> &vec) {
       temp %= static_cast<unsigned long long>(n) * 2;
       ldbl angle = pi * temp / n;
       // Less accurate alternative if long long is unavailable: double angle = M_PI * i * i / n;
-      expTable[i] = lcx(cos(-angle), sin(-angle));
+      expTable[i] = lcx(std::cos(-angle), std::sin(-angle));
    }
    
    // Temporary vectors and preprocessing
