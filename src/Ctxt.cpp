@@ -21,6 +21,7 @@
 
 #include "debugging.h"
 #include "norms.h"
+#include "fhe_stats.h"
 
 NTL_CLIENT
 
@@ -440,7 +441,14 @@ void Ctxt::modDownToSet(const IndexSet &s)
     noiseBound /= f;
     noiseBound += addedNoise;
 
-    if (addedNoise > addedNoiseBound) Error("addedNoiseBound too big");
+    double ratio = conv<double>(addedNoise/addedNoiseBound);
+
+    FHE_STATS_UPDATE("mod-switch-added-noise", ratio);
+
+    if (addedNoise > addedNoiseBound) {
+      Warning("addedNoiseBound too big");
+    }
+
 #else
     ZZX delta;
 
@@ -1592,12 +1600,7 @@ xdouble Ctxt::modSwitchAddedNoiseBound() const
   double B0 = context.noiseBoundForUniform(0.5, context.zMStar.getPhiM());
 
   // B1 represents the noise contributed by the mod-p^r correction
-  double B1 = context.noiseBoundForUniform(double(ptxtSpace)/2.0,
-                                           context.zMStar.getPhiM());
-
-  // This corrects for the difference between continuous and discrete
-  // See comment for compute_fudge in recryption.cpp.
-  if (ptxtSpace%2 == 0) B1 = B1*(1+1/fsquare(ptxtSpace));
+  double B1 = context.noiseBoundForMod(ptxtSpace, context.zMStar.getPhiM());
 
   double roundingNoise = B0 + B1;
 
@@ -1854,7 +1857,8 @@ void innerProduct(Ctxt& result,
 // the moduli-chain in the context, and does not even need to be a prime.
 // The ciphertext *this is not affected, instead the result is returned in
 // the zzParts vector, as a vector of ZZX'es.
-// Returns an extimate for the noise bound after mod-switching.
+// Returns an extimate for the scaled noise (not including the 
+// additive mod switching noise)
 
 #include "powerful.h"
 double Ctxt::rawModSwitch(vector<ZZX>& zzParts, long q) const
@@ -1923,9 +1927,11 @@ double Ctxt::rawModSwitch(vector<ZZX>& zzParts, long q) const
 
   // Return an estimate for the noise
   double scaledNoise = conv<double>(noiseBound*ratio);
-  double addedNoise = conv<double>(modSwitchAddedNoiseBound());
-  return scaledNoise + addedNoise;
+  //double addedNoise = conv<double>(modSwitchAddedNoiseBound());
   // NOTE: technically, modSwitchAddedNoise bound assumes rounding is
   // done in the polynomial basis, rather than the powerful basis,
   // but the same bounds are still valid
+
+  return scaledNoise;
+  // this is returned so that caller can check bounds
 }

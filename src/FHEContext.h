@@ -85,6 +85,7 @@ public:
   //! norm exceeds scale*sigma is at most epsilon=phim*delta. Thus,
   //! scale*sigma will be used as a high-probabability bound on the
   //! L-infty norm of such vectors.
+
   //=======================================
 
   //! Assume the polynomial f(x) = sum_{i < k} f_i x^i is chosen so
@@ -110,6 +111,44 @@ public:
   NTL::xdouble noiseBoundForUniform(NTL::xdouble magBound, long degBound) const
   {
     return scale * std::sqrt(double(degBound) / 3.0) * magBound;
+  }
+
+
+  //=======================================
+
+  //! Assume the polynomial f(x) = sum_{i < k} f_i x^i is chosen so
+  //! that each f_i is chosen uniformly and independently from the
+  //! from the set of balanced residues modulo the given modulus.
+  //! This returns a bound B such that the L-infty norm
+  //! of the canonical embedding exceeds B with probability at most 
+  //! epsilon.
+
+  // NOTE: for odd modulus, this means each f_i is uniformly distributed
+  // over { -floor(modulus/2), ..., floor(modulus/2) }.
+  // For even modulus, this means each f_i is uniformly distributed
+  // over { modulus/2, ..., modulus/2 }, except that the two endpoints
+  // (which represent the same residue class) occur with half the
+  // probability of the others.
+
+  // NOTE: this is a bit heuristic: we assume that if we evaluate
+  // f at a primitive root of unity, then we get something that well
+  // approximates a normal random variable with the same variance,
+  // which is equal to the sum of the variances of the individual
+  // f_i's, which is (modulus)^2/12 + 1/6 for even modulus,
+  // and is at most (modulus^2)/12 for odd modulus.
+  // We then multiply the sqrt of the variance by scale to get
+  // the high probability bound.
+
+  // NOTE: this is slightly more accurate that just calling
+  // noiseBoundForUniform with magBound=modulus/2.
+
+
+  double noiseBoundForMod(long modulus, long degBound) const
+  {
+    double var = fsquare(modulus)/12.0;
+    if (modulus%2 == 0) var += 1.0/6.0;
+ 
+    return scale * std::sqrt(degBound * var);
   }
 
   //=======================================

@@ -329,7 +329,7 @@ double sampleSmallBounded(zzX &poly, const FHEcontext& context)
   long phim = palg.getPhiM();
 
   // should be good with probability at least 1/2
-  double bound = sqrt(phim*log(phim))*0.71;
+  double bound = sqrt(phim*log(phim)/2.0);
 
 #if 1
   double val;

@@ -414,6 +414,7 @@ void convert(std::vector<NTL::ZZX>& X, const NTL::vec_zz_pE& A);
 void convert(std::vector< std::vector<NTL::ZZX> >& X, const NTL::mat_zz_pE& A);
 void convert(NTL::Vec<long>& out, const NTL::ZZX& in);
 void convert(NTL::Vec<long>& out, const NTL::zz_pX& in, bool symmetric=true);
+//void convert(NTL::Vec<long>& out, const NTL::zz_pX& in);
 void convert(NTL::Vec<long>& out, const NTL::GF2X& in);
 void convert(NTL::ZZX& out, const NTL::Vec<long>& in);
 void convert(NTL::GF2X& out, const NTL::Vec<long>& in);
@@ -857,11 +858,11 @@ void make_lazy_with_fun(const NTL::Lazy<T,P>& obj, F f, Args&&... args)
 
 inline void 
 Warning(const char *msg)
-{ std::cerr << msg << "\n"; }
+{ std::cerr << "WARNING: " << msg << "\n"; }
 
 inline void 
 Warning(const std::string& msg)
-{ std::cerr << msg << "\n"; }
+{ std::cerr << "WARNING: " << msg << "\n"; }
 
 
 // An array of inverce erfc values.

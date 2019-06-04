@@ -20,6 +20,7 @@
 #include "norms.h"
 #include "sample.h"
 #include "debugging.h"
+#include "fhe_stats.h"
 
 NTL_CLIENT
 
@@ -1176,7 +1177,22 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
 
   // "raw mod-switch" to the bootstrapping mosulus q=p^e+1.
   vector<ZZX> zzParts; // the mod-switched parts, in ZZX format
-  double noise = ctxt.rawModSwitch(zzParts, q);
+  long phim = ctxt.getContext().zMStar.getPhiM();
+  double noise_est = ctxt.rawModSwitch(zzParts, q) * sqrt(double(phim));
+  // noise_est is an upper bound on the L-infty norm of the scaled noise 
+  // in the pwrfl basis...this is a fairly pessimistc bound, so even if
+  // it is violated, things are probably still OK
+  double noise_bnd = 0.25*p2r*ctxt.getContext().boundForRecryption();
+  // noise_bnd is the bound assumed in selecting the parameters 
+  double noise_rat = noise_est/noise_bnd;
+
+  FHE_STATS_UPDATE("raw-mod-switch-noise", noise_rat);
+
+  if (noise_rat > 1) {
+    Warning("rawModSwitch scaled noise exceeds bound: " + std::to_string(noise_rat));
+  }
+  
+
   //OLD: assert(zzParts.size() == 2);
   helib::assertEq(zzParts.size(), (std::size_t)2, "Exactly 2 parts required for mod-switching in thin bootstrapping");
 
@@ -1307,14 +1323,6 @@ printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
 }
 
 
-bool fhe_stats=false;
-double fhe_stats_x_sum=0, fhe_stats_x_max=0;
-double fhe_stats_xmod_sum=0, fhe_stats_xmod_max=0;
-double fhe_stats_u_sum=0, fhe_stats_u_max=0;
-double fhe_stats_v_sum=0, fhe_stats_v_max=0;
-double fhe_stats_cv_sum=0, fhe_stats_cv_max=0;
-
-
 
 static void
 checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
@@ -1332,10 +1340,7 @@ checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   max_pwrfl = conv<xdouble>(largestCoeff(powerful));
   critical_value += conv<double>(max_pwrfl/q);
 
-  if (fhe_stats) {
-    fhe_stats_cv_sum += critical_value;
-    if (critical_value > fhe_stats_cv_max) fhe_stats_cv_max = critical_value; 
-  }
+  FHE_STATS_UPDATE("critical-value", critical_value);
 
   cerr << "=== critical_value=" << critical_value;
   if (critical_value > 0.5) cerr << " BAD-BOUND";
@@ -1359,10 +1364,7 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   double max_pwrfl = conv<double>(largestCoeff(powerful));
   double ratio = max_pwrfl/(q*coeff_bound);
 
-  if (fhe_stats) {
-    fhe_stats_x_sum += ratio;
-    if (ratio > fhe_stats_x_max) fhe_stats_x_max = ratio;
-  }
+  FHE_STATS_UPDATE("|x|/bound", ratio);
 
   cerr << "=== |x|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1371,10 +1373,7 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   max_pwrfl = conv<double>(largestCoeff(powerful));
   ratio = max_pwrfl/(2*p2r*coeff_bound);
 
-  if (fhe_stats) {
-    fhe_stats_xmod_sum += ratio;
-    if (ratio > fhe_stats_xmod_max) fhe_stats_xmod_max = ratio;
-  }
+  FHE_STATS_UPDATE("|x%q|/bound", ratio);
 
   cerr << ", (|x%q|)/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1418,10 +1417,7 @@ checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
     ratio = max_pwrfl/denom;
   }
 
-  if (fhe_stats) {
-    fhe_stats_u_sum += ratio;
-    if (ratio > fhe_stats_u_max) fhe_stats_u_max = ratio;
-  }
+  FHE_STATS_UPDATE("|u|/bound", ratio);
 
   cerr << "=== |u|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1472,10 +1468,7 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
     ratio = max_pwrfl/denom;
   }
 
-  if (fhe_stats) {
-    fhe_stats_v_sum += ratio;
-    if (ratio > fhe_stats_v_max) fhe_stats_v_max = ratio;
-  }
+  FHE_STATS_UPDATE("|v|/bound", ratio);
 
   cerr << "=== |v|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
@@ -1492,6 +1485,7 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
 }
 
 
+#if 0
 void fhe_stats_print(long iter, const FHEcontext& context)
 {
    long phim = context.zMStar.getPhiM();
@@ -1515,3 +1509,4 @@ void fhe_stats_print(long iter, const FHEcontext& context)
 
 
 }
+#endif

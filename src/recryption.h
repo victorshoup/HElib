@@ -135,14 +135,6 @@ public:
             bool minimal=false);
 };
 
-extern bool fhe_stats;
-extern double fhe_stats_x_sum, fhe_stats_x_max;
-extern double fhe_stats_xmod_sum, fhe_stats_xmod_max;
-extern double fhe_stats_u_sum, fhe_stats_u_max;
-extern double fhe_stats_v_sum, fhe_stats_v_max;
-extern double fhe_stats_cv_sum, fhe_stats_cv_max;
-
-void fhe_stats_print(long iter, const FHEcontext& context);
 
 
 

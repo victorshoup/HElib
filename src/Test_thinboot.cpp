@@ -14,6 +14,7 @@
 #include "EncryptedArray.h"
 #include "matmul.h"
 #include "debugging.h"
+#include "fhe_stats.h"
 
 NTL_CLIENT
 
@@ -107,7 +108,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
   if (fhe_stats && numkey > 0 && numkey%100 == 0) 
-    fhe_stats_print(numkey, context);
+    print_stats(cout);
 
   cerr << "*********** iter=" << (numkey+1) << "\n";
 
@@ -199,7 +200,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     cout << "BAD\n";
   }
 
-  if (fhe_stats) fhe_stats_print(OUTER_REP, context);
+  if (fhe_stats) print_stats(cout);
+
 }
 
 

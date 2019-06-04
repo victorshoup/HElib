@@ -563,7 +563,8 @@ public:
   //! the moduli-chain in the context, and does not even need to be a prime.
   //! The ciphertext *this is not affected, instead the result is returned in
   //! the zzParts std::vector, as a std::vector of ZZX'es.
-  //! Returns an extimate for the noise bound after mod-switching.
+  //! Returns an extimate for the scaled noise (not including the
+  //! additive mod switching noise)
   double rawModSwitch(std::vector<NTL::ZZX>& zzParts, long toModulus) const;
 
   //! @brief compute the power X,X^2,...,X^n
