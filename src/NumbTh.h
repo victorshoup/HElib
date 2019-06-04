@@ -398,6 +398,7 @@ inline NTL::ZZX MulMod(const NTL::ZZX& f, long a, long q, bool abs=true) {
   return res;
 }
 
+
 ///@{
 //! @name Some enhanced conversion routines
 inline void convert(long& x1, const NTL::GF2X& x2)
@@ -414,7 +415,6 @@ void convert(std::vector<NTL::ZZX>& X, const NTL::vec_zz_pE& A);
 void convert(std::vector< std::vector<NTL::ZZX> >& X, const NTL::mat_zz_pE& A);
 void convert(NTL::Vec<long>& out, const NTL::ZZX& in);
 void convert(NTL::Vec<long>& out, const NTL::zz_pX& in, bool symmetric=true);
-//void convert(NTL::Vec<long>& out, const NTL::zz_pX& in);
 void convert(NTL::Vec<long>& out, const NTL::GF2X& in);
 void convert(NTL::ZZX& out, const NTL::Vec<long>& in);
 void convert(NTL::GF2X& out, const NTL::Vec<long>& in);

@@ -870,7 +870,6 @@ void convert(NTL::Vec<long>& out, const NTL::ZZX& in)
 }
 
 
-#if 1
 void convert(NTL::Vec<long>& out, const NTL::zz_pX& in, bool symmetric)
 {
   out.SetLength(in.rep.length());
@@ -884,22 +883,6 @@ void convert(NTL::Vec<long>& out, const NTL::zz_pX& in, bool symmetric)
         out[i] -= p;
   }
 }
-#else
-void convert(NTL::Vec<long>& out, const NTL::zz_pX& in)
-{
-  out.SetLength(in.rep.length());
-  for (long i=0; i<out.length(); i++)
-    out[i] = conv<long>(in[i]);
-
-  if (true) { // convert to representation symmetric around 0
-    long p = zz_p::modulus();
-    for (long i=0; i<out.length(); i++)
-      if (out[i] > p/2)
-        out[i] -= p;
-  }
-}
-
-#endif
 
 
 void convert(NTL::Vec<long>& out, const NTL::GF2X& in)

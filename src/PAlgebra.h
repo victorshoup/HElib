@@ -158,7 +158,7 @@ class PAlgebra {
 
   //! the i'th generator in (Z/mZ)^* /(p) (if any)
   long ZmStarGen(long i) const
-  {  return (i<gens.size())? gens[i] : 0; }
+  {  return (i<long(gens.size()))? gens[i] : 0; }
 
   //! the i'th generator to the power j mod m
   // VJS: I'm moving away from all of this unsigned stuff...
