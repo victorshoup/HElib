@@ -374,13 +374,12 @@ public:
   //! Add a constant polynomial. 
   //! If provided, size should be a high-probability bound
   //! on the L-infty norm of the canonical embedding
-  //! Otherwise, a bound based on the assumption that the coefficients
-  //! are uniformly and independently distributed over
+  //! Otherwise, for the DoubleCRT variant, a bound based on the assumption 
+  //! that the coefficients are uniformly and independently distributed over
   //! [-ptxtSpace/2, ptxtSpace/2].
-  //! Otherwise, size should be a high-prob	
+  //! For the other variants, explicit bounds are computed (if not CKKS).
   void addConstant(const DoubleCRT& dcrt, double size=-1.0);
-  void addConstant(const NTL::ZZX& poly, double size=-1.0)
-  { addConstant(DoubleCRT(poly,context,primeSet),size); }
+  void addConstant(const NTL::ZZX& poly, double size=-1.0);
   void addConstant(const NTL::ZZ& c);
   //! add a rational number in the form a/b, a,b are long
   void addConstantCKKS(std::pair</*numerator=*/long,/*denominator=*/long>);
@@ -399,7 +398,7 @@ public:
   //! If the size is not given, for the DCRT variant, we use
   //! a high probability bound assuming "random" coefficients
   //! mod ptxtSpace, while for the other variants, we use
-  //! explicitly computed bounds.
+  //! explicitly computed bounds (if not CKKS).
   void multByConstant(const DoubleCRT& dcrt, double size=-1.0);
   void multByConstant(const NTL::ZZX& poly, double size=-1.0);
   void multByConstant(const zzX& poly, double size=-1.0);

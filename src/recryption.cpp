@@ -1234,19 +1234,14 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
   }
 
 
-  // Multiply the post-processed cipehrtext by the encrypted sKey
-
-  double p0size = to_double(embeddingLargestCoeff(zzParts[0], context.zMStar));
-  double p1size = to_double(embeddingLargestCoeff(zzParts[1], context.zMStar));
-  // FIXME: This might be slow without Armadillo
 
   // NOTE: here we lose the intFactor associated with ctxt.
   // We will restore it below.
   ctxt = recryptEkey;
 
 
-  ctxt.multByConstant(zzParts[1], p1size);
-  ctxt.addConstant(zzParts[0], p0size);
+  ctxt.multByConstant(zzParts[1]);
+  ctxt.addConstant(zzParts[0]);
 
 #ifdef DEBUG_PRINTOUT
    CheckCtxt(ctxt, "after bootKeySwitch");

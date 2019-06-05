@@ -750,6 +750,16 @@ void Ctxt::addConstant(const DoubleCRT& dcrt, double size)
   addPart(tmp, SKHandle(0,1,0));
 }
 
+void Ctxt::addConstant(const NTL::ZZX& poly, double size)
+{
+  if (size < 0 && !isCKKS()) {
+    size = conv<double>(embeddingLargestCoeff(poly, getContext().zMStar));
+  }
+  
+  addConstant(DoubleCRT(poly,context,primeSet), size);
+  
+}
+
 // Add a constant polynomial
 void Ctxt::addConstant(const ZZ& c)
 {
@@ -1361,7 +1371,7 @@ void Ctxt::multByConstant(const ZZX& poly, double size)
 {
   FHE_TIMER_START;
   if (this->isEmpty()) return;
-  if (size < 0) {
+  if (size < 0 && !isCKKS()) {
     size = conv<double>(embeddingLargestCoeff(poly, getContext().zMStar));
   }
   DoubleCRT dcrt(poly,context,primeSet);
@@ -1372,7 +1382,7 @@ void Ctxt::multByConstant(const zzX& poly, double size)
 {
   FHE_TIMER_START;
   if (this->isEmpty()) return;
-  if (size < 0) {
+  if (size < 0 && !isCKKS()) {
     size = embeddingLargestCoeff(poly, getContext().zMStar);
   }
   DoubleCRT dcrt(poly,context,primeSet);

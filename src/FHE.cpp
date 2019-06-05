@@ -1035,8 +1035,8 @@ long FHESecKey::skEncrypt(Ctxt &ctxt, const ZZX& ptxt,
     double sz_est = context.noiseBoundForMod(ptxtSpace, context.zMStar.getPhiM());
     ctxt.addConstant(ptxt, sz_est);  
     // add in the plaintext
-    // NOTE: we explicitly include a size estimate, as addConstant may explicitly
-    // compute the size, which could lead to information leakage
+    // NOTE: we explicitly include a size estimate, as addConstant explicitly
+    // computes the size, which could lead to information leakage.
     // We check that the size estimate is correct here, and give a warning if it's not
 
     double sz = conv<double>(embeddingLargestCoeff(ptxt, context.zMStar));
