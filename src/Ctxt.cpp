@@ -70,9 +70,7 @@ void Ctxt::DummyEncrypt(const ZZX& ptxt, double size)
       // HEURISTIC: we assume that we can safely model the coefficients
       // of ptxt as uniformly and independently distributed over
       // [-magBound, magBound], where magBound = ptxtSpace/2
-      double magBound = double(ptxtSpace)/2;
-      long degBound = zMStar.getPhiM();
-      noiseBound = context.noiseBoundForUniform(magBound, degBound);
+      noiseBound = context.noiseBoundForMod(ptxtSpace, zMStar.getPhiM());
     }
     else
       noiseBound = size;
@@ -727,7 +725,7 @@ void Ctxt::addConstant(const DoubleCRT& dcrt, double size)
   // that the coefficients are uniformly and independently distributed
   // over [-ptxtSpace/2, ptxtSpace/2]
   if (size < 0.0)
-      size = context.noiseBoundForUniform(double(ptxtSpace)/2.0, context.zMStar.getPhiM());
+      size = context.noiseBoundForMod(ptxtSpace, context.zMStar.getPhiM());
 
   // Scale the constant, then add it to the part that points to one
   long f = 1;
@@ -916,7 +914,7 @@ void Ctxt::equalizeRationalFactors(Ctxt& c1, Ctxt &c2)
 static xdouble 
 NoiseNorm(xdouble noise1, xdouble noise2, long e1, long e2, long p)
 {
-  return noise1*balRem(e1, p) + noise2*balRem(e2, p);
+  return noise1*abs(balRem(e1, p)) + noise2*abs(balRem(e2, p));
 }
 
 // Add/subtract another ciphertxt (depending on the negative flag)
@@ -1004,11 +1002,11 @@ void Ctxt::addCtxt(const Ctxt& other, bool negative)
       long e1_try = mcMod(r1, ptxtSpace), e2_try = mcMod(t1, ptxtSpace);
       if (e1_try % p != 0) {
         xdouble noise_try = NoiseNorm(noise1, noise2, e1_try, e2_try, ptxtSpace);
-	      if (noise_try < noise_best) {
-	        e1_best = e1_try;
-	        e2_best = e2_try;
-	        noise_best = noise_try;
-	      }
+	  if (noise_try < noise_best) {
+	    e1_best = e1_try;
+	    e2_best = e2_try;
+	    noise_best = noise_try;
+	  }
       }
     }
     e1 = e1_best;
@@ -1349,8 +1347,7 @@ void Ctxt::multByConstant(const DoubleCRT& dcrt, double size)
   // If the size is not given, we use the default value coreesponding
   // to uniform distribution on [-ptxtSpace/2, ptxtSpace/2].
   if (size < 0.0) {
-    size = context.noiseBoundForUniform(double(ptxtSpace)/2.0,
-                                        getContext().zMStar.getPhiM());
+    size = context.noiseBoundForMod(ptxtSpace, getContext().zMStar.getPhiM());
   }
 
   // multiply all the parts by this constant
@@ -1364,6 +1361,9 @@ void Ctxt::multByConstant(const ZZX& poly, double size)
 {
   FHE_TIMER_START;
   if (this->isEmpty()) return;
+  if (size < 0) {
+    size = conv<double>(embeddingLargestCoeff(poly, getContext().zMStar));
+  }
   DoubleCRT dcrt(poly,context,primeSet);
   multByConstant(dcrt,size);
 }
@@ -1372,6 +1372,9 @@ void Ctxt::multByConstant(const zzX& poly, double size)
 {
   FHE_TIMER_START;
   if (this->isEmpty()) return;
+  if (size < 0) {
+    size = embeddingLargestCoeff(poly, getContext().zMStar);
+  }
   DoubleCRT dcrt(poly,context,primeSet);
   multByConstant(dcrt,size);
 }

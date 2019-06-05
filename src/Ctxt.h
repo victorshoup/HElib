@@ -395,8 +395,11 @@ public:
                        NTL::xdouble factor=NTL::xdouble(-1.0));
   void addConstantCKKS(const NTL::ZZ& c);
 
-  //! Multiply-by-constant. If the size is not given, we use
-  //! phi(m)*ptxtSpace^2 as the default value.
+  //! Multiply-by-constant. 
+  //! If the size is not given, for the DCRT variant, we use
+  //! a high probability bound assuming "random" coefficients
+  //! mod ptxtSpace, while for the other variants, we use
+  //! explicitly computed bounds.
   void multByConstant(const DoubleCRT& dcrt, double size=-1.0);
   void multByConstant(const NTL::ZZX& poly, double size=-1.0);
   void multByConstant(const zzX& poly, double size=-1.0);

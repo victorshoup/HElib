@@ -593,7 +593,7 @@ public:
 
   zzX getMask_zzX(long i, long j) const override
   {
-    return convert<zzX>(maskTable.at(i).at(j));
+    return balanced_zzX(maskTable.at(i).at(j));
   }
 
 

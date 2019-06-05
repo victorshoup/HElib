@@ -16,6 +16,7 @@
 #include "binio.h"
 #include "sample.h"
 #include "EncryptedArray.h"
+#include "norms.h"
 
 NTL_CLIENT
 
@@ -469,7 +470,11 @@ long FHEPubKey::Encrypt(Ctxt &ctxt, const ZZX& ptxt, long ptxtSpace,
   }
 
   // NOTE: this is a heuristic
-  double ptxt_bound = context.noiseBoundForUniform(double(ptxtSpace)/2.0, context.zMStar.getPhiM());
+  double ptxt_bound = context.noiseBoundForMod(ptxtSpace, context.zMStar.getPhiM());
+  double ptxt_sz = conv<double>(embeddingLargestCoeff(ptxt, context.zMStar));
+  if (ptxt_sz > ptxt_bound) {
+     Warning("noise bound exceeded in encryption");
+  }
 
   ctxt.noiseBound += ptxt_bound;
 
@@ -1027,7 +1032,18 @@ long FHESecKey::skEncrypt(Ctxt &ctxt, const ZZX& ptxt,
     return long(f);
   }
   else { // BGV
-    ctxt.addConstant(ptxt);  // add in the plaintext
+    double sz_est = context.noiseBoundForMod(ptxtSpace, context.zMStar.getPhiM());
+    ctxt.addConstant(ptxt, sz_est);  
+    // add in the plaintext
+    // NOTE: we explicitly include a size estimate, as addConstant may explicitly
+    // compute the size, which could lead to information leakage
+    // We check that the size estimate is correct here, and give a warning if it's not
+
+    double sz = conv<double>(embeddingLargestCoeff(ptxt, context.zMStar));
+    if (sz > sz_est) {
+       Warning("noise bound exceeded in encryption");
+    }
+
     return ctxt.ptxtSpace;
   }
 }
