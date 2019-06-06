@@ -32,9 +32,6 @@ long printFlag = FLAG_PRINT_VEC;
 
 /************************ Some local functions ***********************/
 /*********************************************************************/
-static void
-printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
-                   const RecryptData& rcData, long q, double noise);
 
 static void
 checkCriticalValue(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
@@ -129,178 +126,6 @@ static void newMakeDivisible(ZZX& poly, long p2e, long q,
   
 }
 
-#if 1
-static long makeDivisible(vec_ZZ& vec, long p2e, long p2r, long q, long a, 
-                          double& U_norm, const PAlgebra& palg, PowerfulDCRT* p2dConv = 0)
-{
-  //OLD: assert(q>0 && p2e>0 && p2r>0 && a>=0 && q % p2e == 1 && a % p2r == 0 && a*2 < p2e);
-  helib::assertTrue<helib::InvalidArgument>(q > 0l, "q must be positive");
-  helib::assertTrue<helib::InvalidArgument>(p2e > 0l, "p2e must be positive");
-  helib::assertTrue<helib::InvalidArgument>(p2r > 0l, "p2r must be positive");
-  helib::assertTrue<helib::InvalidArgument>(a >= 0l, "a must be non-negative");
-
-  helib::assertEq<helib::InvalidArgument>(q % p2e, 1l, "q must equal 1 modulo p2e");
-  helib::assertEq<helib::InvalidArgument>(a % p2r, 0l, "p2r must divide a");
-
-  helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
-
-  long aa = a / p2r;
-
-
-#ifdef DEBUG_PRINTOUT
-  zzX uVec(INIT_SIZE, vec.length());
-  zzX vVec(INIT_SIZE, vec.length());
-#endif
-
-  long maxU = 0;
-  for (long i=0; i<vec.length(); i++) {
-    ZZ& z = vec[i];
-    long u, v;
-
-    // What to add to z to make it divisible by p2e?
-    long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
-    if (zMod > p2e/2) { // need to add a positive number
-      zMod = p2e - zMod;
-      u = zMod/p2r;
-      if (u > aa) u = aa;
-    }
-    else {              // need to add a negative number
-      u = -(zMod/p2r);
-      if (u < -aa) u = -aa;
-      zMod = -zMod;
-    }
-    v = zMod - u*p2r;
-    z += u*p2r + to_ZZ(q)*v; // make z divisible by p2e
-
-    if (rem(z,p2e) != 0) { // sanity check
-      cerr << "**error: original z["<<i<<"]=" << (z-(u*p2r+to_ZZ(q)*v))
-	   << std::dec << ", p^r="<<p2r << ", p^e="<<p2e << endl;
-      cerr << "z' = z + "<<u<<"*p^r +"<<v<<"*q = "<<z<<endl;
-      exit(1);
-    }
-    if (abs(u) > maxU) maxU = abs(u);
-#ifdef DEBUG_PRINTOUT
-    uVec[i] = u;
-    vVec[i] = v;
-#endif
-  }
-
-#ifdef DEBUG_PRINTOUT
-  if (dbgEa) {
-    const PAlgebra& palg = dbgEa->getPAlgebra();
-    double V_norm;
-    if (p2dConv) {
-       ZZX poly;
-       p2dConv->powerfulToZZX(poly, conv<Vec<ZZ>>(uVec));
-       U_norm = conv<double>(embeddingLargestCoeff(poly, palg)) *p2r;
-       p2dConv->powerfulToZZX(poly, conv<Vec<ZZ>>(vVec));
-       V_norm = conv<double>(embeddingLargestCoeff(poly, palg));
-    }
-    else {
-      U_norm = conv<double>(embeddingLargestCoeff(uVec, palg)) *p2r;
-      V_norm = conv<double>(embeddingLargestCoeff(vVec, palg));
-    }
-    cerr << "  makeDivisible: maxU=" << (maxU*p2r)
-         << ", U_norm=" << U_norm
-         << ", V_norm=" << V_norm << endl;
-  }
-#endif
-
-  return maxU;
-}
-#else
-// experimental, randomized version
-static long makeDivisible(vec_ZZ& vec, long p2e, long p2r, long q, long a, 
-                          double& U_norm, const PAlgebra& palg)
-{
-  //OLD: assert(q>0 && p2e>0 && p2r>0 && a>=0 && q % p2e == 1 && a % p2r == 0 && a*2 < p2e);
-  helib::assertTrue<helib::InvalidArgument>(q > 0l, "q must be positive");
-  helib::assertTrue<helib::InvalidArgument>(p2e > 0l, "p2e must be positive");
-  helib::assertTrue<helib::InvalidArgument>(p2r > 0l, "p2r must be positive");
-  helib::assertTrue<helib::InvalidArgument>(a >= 0l, "a must be non-negative");
-
-  helib::assertEq<helib::InvalidArgument>(q % p2e, 1l, "q must equal 1 modulo p2e");
-  helib::assertEq<helib::InvalidArgument>(a % p2r, 0, "p2r must divide a");
-
-  helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
-  long aa = a / p2r;
-
-
-  vec_ZZ orig_vec = vec;
-  double sum_norm;
-  long maxU;
-
-  zzX uVec(INIT_SIZE, vec.length());
-  zzX vVec(INIT_SIZE, vec.length());
-
-  for (long trials = 0; trials < 10; trials++) {
-    vec_ZZ try_vec = orig_vec;
-
-    long maxU1 = 0;
-    for (long i=0; i<vec.length(); i++) {
-      ZZ& z = try_vec[i];
-      long u, v;
-
-      // What to add to z to make it divisible by p2e?
-      long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
-      if (zMod > p2e/2) { // need to add a positive number
-	zMod = p2e - zMod;
-	u = zMod/p2r;
-	if (u > aa) u = aa;
-        if (u > 0) {
-          long ran = RandomBnd(u+1); //0..u
-          u -= ran;
-        }
-      }
-      else {              // need to add a negative number
-	u = -(zMod/p2r);
-	if (u < -aa) u = -aa;
-        if (-u > 0) {
-          long ran = RandomBnd(-u+1); //0..|u|
-          u += ran;
-        }
-	zMod = -zMod;
-      }
-      v = zMod - u*p2r;
-      z += u*p2r + to_ZZ(q)*v; // make z divisible by p2e
-
-      if (rem(z,p2e) != 0) { // sanity check
-	cerr << "**error: original z["<<i<<"]=" << (z-(u*p2r+to_ZZ(q)*v))
-	     << std::dec << ", p^r="<<p2r << ", p^e="<<p2e << endl;
-	cerr << "z' = z + "<<u<<"*p^r +"<<v<<"*q = "<<z<<endl;
-	exit(1);
-      }
-      if (abs(u) > maxU1) maxU1 = abs(u);
-
-      uVec[i] = u;
-      vVec[i] = v;
-    }
-
-    double U_norm1 = conv<double>(embeddingLargestCoeff(uVec, palg)) *p2r;
-    double V_norm1 = conv<double>(embeddingLargestCoeff(vVec, palg));
-    double sum_norm1 = U_norm1 + V_norm1;
-#ifdef DEBUG_PRINTOUT
-      cerr << "  makeDivisible: maxU1=" << (maxU1*p2r)
-	   << ", U_norm1=" << U_norm1
-	   << ", V_norm1=" << V_norm1 
-           << ", sum=" << (U_norm1+V_norm1) 
-           << "\n";
-#endif
-
-    if (trials == 0 || sum_norm1 < sum_norm) {
-      sum_norm = sum_norm1;
-      maxU = maxU1;
-      U_norm = U_norm1;
-      vec = try_vec;
-    }
-  }
-
-  return maxU;
-}
-
-#endif
-
-static inline double pow(long a, long b) {return pow(double(a), double(b));}
 /*********************************************************************/
 /*********************************************************************/
 
@@ -316,8 +141,7 @@ RecryptData::~RecryptData()
 
 /**
  * Summary of Appendix A from https://ia.cr/2014/873 (version from 2019):
- * Assume that we already chosen a, e, e' and t (which induces the
- * secret-key size tau).
+ * Assume that we already chosen e, e' and t.
  * 
  * Based in this analysis, we need
  *    (1) (f*p^{e'} + 2*p^r+2))*B <= p^e/2
@@ -379,7 +203,7 @@ double compute_fudge(long p2ePrime, long p2e)
   return 1 + eps;
 }
 
-long RecryptData::setAE(long& a, long& e, long& ePrime,
+long RecryptData::setAE(long& e, long& ePrime,
                     const FHEcontext& context, long targetWeight)
 {
   bool default_target=false;
@@ -434,8 +258,6 @@ long RecryptData::setAE(long& a, long& e, long& ePrime,
     ePrimeTry++;
   } 
 
-  a = 0;
-
 #ifdef DEBUG_PRINTOUT
   cerr << "RecryptData::setAE(): e="<<e<<", e'="<<ePrime
        << endl;
@@ -468,7 +290,7 @@ void RecryptData::init(const FHEcontext& context, const Vec<long>& mvec_,
   mvec = mvec_;
   build_cache = build_cache_;
 
-  skHwt = setAE(a, e, ePrime, context, t);
+  skHwt = setAE(e, ePrime, context, t);
   long p = context.zMStar.getP();
   long r = context.alMod.getR();
 
@@ -592,48 +414,58 @@ void FHEPubKey::reCrypt(Ctxt &ctxt)
 
   // "raw mod-switch" to the bootstrapping mosulus q=p^e+1.
   vector<ZZX> zzParts; // the mod-switched parts, in ZZX format
-  double noise = ctxt.rawModSwitch(zzParts, q);
+  long phim = ctxt.getContext().zMStar.getPhiM();
+  double noise_est = ctxt.rawModSwitch(zzParts, q) * sqrt(double(phim));
+  // noise_est is an upper bound on the L-infty norm of the scaled noise 
+  // in the pwrfl basis...this is a fairly pessimistc bound, so even if
+  // it is violated, things are probably still OK
+  double noise_bnd = 0.25*p2r*ctxt.getContext().boundForRecryption();
+  // noise_bnd is the bound assumed in selecting the parameters 
+  double noise_rat = noise_est/noise_bnd;
+
+  FHE_STATS_UPDATE("raw-mod-switch-noise", noise_rat);
+
+  if (noise_rat > 1) {
+    Warning("rawModSwitch scaled noise exceeds bound: " + std::to_string(noise_rat));
+  }
+
+
+  //OLD: assert(zzParts.size() == 2);
+  helib::assertEq(zzParts.size(), (std::size_t)2, "Exactly 2 parts required for mod-switching in thin bootstrapping");
+
 
 #ifdef DEBUG_PRINTOUT
   if (dbgKey) {
-    cerr << "  before makeDivisible (recryption modulus q="<<q
-         << "), noise_bnd=" << noise<<endl;
-    printSizesPowerful(zzParts, dbgKey->sKeys[recryptKeyID],
-                       ctxt.getContext().rcData, q, noise);
+    checkRecryptBounds(zzParts, dbgKey->sKeys[recryptKeyID],
+                       ctxt.getContext(), q);
   }
 #endif
 
-  // Add multiples of p2r and q to make the zzParts divisible by p^{e'}
-  long maxU=0;
-  double maxU_norm = 0;
-  for (long i=0; i<(long)zzParts.size(); i++) {
+  vector<ZZX> v;
+  v.resize(2);
+
+
+  // Add multiples of q to make the zzParts divisible by p^{e'}
+  for (long i: range(2)) {
     // make divisible by p^{e'}
-    double U_norm;
-    long newMax = makeDivisible(zzParts[i].rep, p2ePrime, p2r, q,
-				rcData.a, U_norm, context.zMStar);
-    zzParts[i].normalize();   // normalize after working directly on the rep
-    if (maxU < newMax)  maxU = newMax;
-    if (maxU_norm < U_norm)  maxU_norm = U_norm;
+
+    newMakeDivisible(zzParts[i], p2ePrime, q, ctxt.getContext(), v[i]);
+
   }
+
 #ifdef DEBUG_PRINTOUT
-  double newNoise = noise + maxU_norm*p2r*(skBounds[recryptKeyID]+1);
-  cerr << "  after makeDivisible, maxU=" << maxU
-       << ", maxU_norm="<<maxU_norm<<", p2r="<<p2r
-       << ", noise_bnd="<<newNoise<<", sk_bnd="<< skBounds[recryptKeyID]
-       << endl;
-   if (dbgKey)
-     printSizesPowerful(zzParts, dbgKey->sKeys[recryptKeyID],
-                        ctxt.getContext().rcData, q, newNoise);
+  if (dbgKey) {
+    checkRecryptBounds_v(v, dbgKey->sKeys[recryptKeyID],
+		       ctxt.getContext(), q);
+    checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
+                       ctxt.getContext().rcData, q);
+  }
 #endif
 
-  for (long i=0; i<(long)zzParts.size(); i++)
+
+  for (long i: range(zzParts.size())) {
     zzParts[i] /= p2ePrime;   // divide by p^{e'}
-
-  // Multiply the post-processed cipehrtext by the encrypted sKey
-
-  double p0size = to_double(embeddingLargestCoeff(zzParts[0], context.zMStar));
-  double p1size = to_double(embeddingLargestCoeff(zzParts[1], context.zMStar));
-  // FIXME: This might be slow without Armadillo
+  }
 
   // NOTE: here we lose the intFactor associated with ctxt.
   // We will restore it below.
@@ -917,7 +749,7 @@ void extractDigitsThin(Ctxt& ctxt, long botHigh, long r, long ePrime)
 
   Ctxt unpacked(ctxt);
   unpacked.cleanUp();
-
+ 
   vector<Ctxt> scratch;
 
   long p = ctxt.getContext().zMStar.getP();
@@ -1208,12 +1040,9 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
     zzParts[i] /= p2ePrime;   // divide by p^{e'}
   }
 
-
-
   // NOTE: here we lose the intFactor associated with ctxt.
   // We will restore it below.
   ctxt = recryptEkey;
-
 
   ctxt.multByConstant(zzParts[1]);
   ctxt.addConstant(zzParts[0]);
@@ -1246,50 +1075,6 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
   // restore intFactor
   if (intFactor != 1)
     ctxt.intFactor = MulMod(ctxt.intFactor, intFactor, ptxtSpace);
-}
-
-
-static void
-printSizesPowerful(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
-                   const RecryptData& rcData, long q, double noise)
-{
-  ZZX ptxt;
-  //  const RecryptData& rcData = ctxt.getContext().rcData;
-  const PAlgebra& palg = rcData.ea->getPAlgebra();
-  rawDecrypt(ptxt, zzParts, sKey); // no mod q
-
-  Vec<ZZ> powerful;
-  rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
-  xdouble max_pwrfl = conv<xdouble>(largestCoeff(powerful));
-  xdouble max_canon = embeddingLargestCoeff(ptxt, palg);
-  double ratio = log(max_pwrfl/max_canon)/log(2.0);
-  xdouble critical_value = (max_pwrfl/q)/q;
-  cerr << "                     max_pwrfl/q^2=" << ((max_pwrfl/q)/q)
-       << ", log2(max_pwrfl/max_canon)=" << ratio;
-  if (ratio > 0) cerr << " BAD-BOUND";
-  cerr << endl;
-
-
-  vecRed(powerful, powerful, q, false);
-  max_pwrfl = conv<xdouble>(largestCoeff(powerful));
-  rcData.p2dConv->powerfulToZZX(ptxt, powerful);
-  max_canon = embeddingLargestCoeff(ptxt, palg);
-  ratio = log(max_pwrfl/max_canon)/log(2.0);
-  critical_value += max_pwrfl/q;
-  cerr << "        after mod q, max_pwrfl/q=" << (max_pwrfl/q);
-  if (critical_value > 0.5) cerr << " BAD-BOUND";
-  cerr << ", log2(max_pwrfl/max_canon)=" << ratio;
-  if (ratio > 0) cerr << " BAD-BOUND";
-
-
-  ratio = log(max_canon/noise)/log(2.0);
-  cerr << "\n        log2(max_canon/noiseEst)=" << ratio;
-  if (ratio > 0) cerr << " BAD-BOUND";
-
-  ratio = log(noise/q)/log(2.0);
-  cerr << ", log2(noiseEst/q)=" << ratio;
-
-  cerr << endl;
 }
 
 

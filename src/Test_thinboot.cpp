@@ -93,7 +93,6 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     cout << " done in "<<t<<" seconds\n";
     cout << "  e="    << context.rcData.e
 	 << ", e'="   << context.rcData.ePrime
-	 << ", a="<< context.rcData.a
 	 << ", t="    << context.rcData.skHwt
 	 << "\n  ";
     context.zMStar.printout();

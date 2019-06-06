@@ -500,8 +500,8 @@ void addSpecialPrimes(FHEcontext& context, long nDgts,
 
   long p2e = p2r;
   if (willBeBootstrappable) { // bigger p^e for bootstrapping
-    long e, ePrime, a;
-    RecryptData::setAE(a,e,ePrime, context, skHwt);
+    long e, ePrime;
+    RecryptData::setAE(e,ePrime, context, skHwt);
     p2e *= NTL::power_long(p, e-ePrime);
   }
 

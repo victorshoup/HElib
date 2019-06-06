@@ -27,6 +27,7 @@ NTL_CLIENT
 #include "powerful.h"
 #include "matmul.h"
 #include "debugging.h"
+#include "fhe_stats.h"
 
 static bool noPrint = false;
 static bool dry = false; // a dry-run flag
@@ -59,6 +60,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     m = computeProd(mvec);
     phim = phi_N(m);
     helib::assertTrue(GCD(p, m) == 1, "GCD(p, m) == 1");
+
+  fhe_stats = true;
 
   if (!noPrint) {
     cout << "*** TestIt";
@@ -107,7 +110,6 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     cout << " done in "<<t<<" seconds\n";
     cout << "  e="    << context.rcData.e
 	 << ", e'="   << context.rcData.ePrime
-	 << ", a="    << context.rcData.a
 	 << ", t="    << context.rcData.skHwt
 	 << "\n  ";
     context.zMStar.printout();
@@ -122,7 +124,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   if (!noPrint) cout << "Generating keys, " << std::flush;
   FHESecKey secretKey(context);
   FHEPubKey& publicKey = secretKey;
-  secretKey.GenSecKey();      // A +-1/0 secret key
+  secretKey.GenSecKey(64);      // A +-1/0 secret key
   addSome1DMatrices(secretKey); // compute key-switching matrices that we need
   addFrbMatrices(secretKey);
   if (!noPrint) cout << "computing key-dependent tables..." << std::flush;
@@ -132,20 +134,15 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   zz_p::init(p2r);
   zz_pX poly_p = random_zz_pX(context.zMStar.getPhiM());
-  PowerfulConversion pConv(context.rcData.p2dConv->getIndexTranslation());
-  HyperCube<zz_p> powerful(pConv.getShortSig());
-  pConv.polyToPowerful(powerful, poly_p);
-  ZZX ptxt_poly = conv<ZZX>(poly_p);
-  PolyRed(ptxt_poly, p2r, true); // reduce to the symmetric interval
+  zzX poly_p1 = balanced_zzX(poly_p);
+  ZZX ptxt_poly = convert<ZZX>(poly_p1);
+  ZZX ptxt_poly1;
+  PolyRed(ptxt_poly1, ptxt_poly, p2r, true);  
+  // this is the format produced by decryption
 
-#ifdef DEBUG_PRINTOUT
-  dbgKey = &secretKey; // debugging key and ea
-  dbgEa = context.rcData.ea; // EA for plaintext space p^{e+r-e'}
-  dbg_ptxt = ptxt_poly;
-  context.rcData.p2dConv->ZZXtoPowerful(ptxt_pwr, dbg_ptxt);
-  vecRed(ptxt_pwr, ptxt_pwr, p2r, true);
-  if (dbgEa->size()>100) printFlag = 0; // don't print too many slots
-#endif
+  if (debug) {
+    dbgKey = &secretKey; // debugging key 
+  }
 
   ZZX poly2;
   Ctxt c1(publicKey);
@@ -153,37 +150,14 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   secretKey.Encrypt(c1,ptxt_poly,p2r);
 
 
-  Ctxt c_const1(publicKey);
-  secretKey.Encrypt(c_const1, ZZX(1), p2r);
-
-  c1.multiplyBy(c_const1);
-
   for (long num=0; num<INNER_REP; num++) { // multiple tests with same key
     publicKey.reCrypt(c1);
     secretKey.Decrypt(poly2,c1);
 
-    if (ptxt_poly == poly2) cout << "GOOD\n";
-    else if (!isDryRun()) { // bootsrtapping error
+    if (ptxt_poly1 == poly2) 
+      cout << "GOOD\n";
+    else
       cout << "BAD\n";
-#ifdef DEBUG_PRINTOUT
-      conv(poly_p,poly2);
-      HyperCube<zz_p> powerful2(pConv.getShortSig());
-      cout << "decryption error, encrypted ";
-      printVec(cout, powerful.getData())<<endl;
-
-      pConv.polyToPowerful(powerful2, poly_p);
-      cout << "                after reCrypt ";
-      printVec(cout, powerful2.getData())<<endl;
-      long numDiff = 0;
-      for (long i=0; i<powerful.getSize(); i++) 
-        if (powerful[i] != powerful2[i]) {
-          numDiff++;
-          cout << i << ": " << powerful[i] << " != " << powerful2[i]<<", ";
-          if (numDiff >5) break;
-        }
-#endif
-      exit(0);
-    }
   }
   }
   if (!noPrint) printAllTimers();
@@ -193,6 +167,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     getrusage( RUSAGE_SELF, &rusage );
     if (!noPrint) cout << "  rusage.ru_maxrss="<<rusage.ru_maxrss << endl;
 #endif
+  print_stats(cout);
 }
 
 /********************************************************************
@@ -210,7 +185,7 @@ int main(int argc, char *argv[])
   long c=3;
   long L=600;
   long N=0;
-  long t=0;
+  long t=64;
   long nthreads=1;
 
   long seed=0;
