@@ -103,8 +103,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   long p2r = context.alMod.getPPowR();
 
-  if (debug && OUTER_REP > 1)
-    fhe_stats = true;
+  fhe_stats = true;
 
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
   if (fhe_stats && numkey > 0 && numkey%100 == 0) 
@@ -156,19 +155,19 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   Ctxt c2(c1);
 
-  if (!noPrint) CheckCtxt(c2, "before multiplications");
+  if (!noPrint) CheckCtxt(c2, "before squarings");
 
-  long mul_count = -1;
+  long sqr_count = -1;
   Ctxt next_c2(c2);
   do {
     c2 = next_c2;
-    next_c2.multiplyBy(c1);
-    mul_count++;
+    next_c2.multiplyBy(next_c2);
+    sqr_count++;
   } 
   while (next_c2.bitCapacity() >= 100);
 
   if (!noPrint) {
-    cout << "mul_count=" << mul_count << "\n";
+    cout << "sqr_count=" << sqr_count << "\n";
     CheckCtxt(c2, "before recryption");
   }
 
@@ -180,12 +179,12 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
  
   }
 
-  //printAllTimers();
 
   if (!noPrint) CheckCtxt(c2, "after recryption");
 
-  for (auto& x: val0)
-    x = power(x, mul_count+1);
+  for (auto& x: val0) {
+    for (long i: range(sqr_count)) x = x*x;
+  }
 
   for (long i = 0; i < nslots; i++) {
     val1[i] = conv<ZZX>(conv<ZZ>(rep(val0[i])));
@@ -199,6 +198,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   else
     cout << "BAD\n";
   }
+
+  printAllTimers();
 
   if (fhe_stats) print_stats(cout);
 

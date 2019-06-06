@@ -45,10 +45,6 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
                    const FHEcontext& context, long q);
 
 static void
-checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
-                     const FHEcontext& context, long q);
-
-static void
 checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
                      const FHEcontext& context, long q);
 
@@ -62,32 +58,23 @@ static void x2iInSlots(ZZX& poly, long i,
   ea.encode(poly, xVec);
 }
 
-// Make every entry of vec divisible by p2e by adding/subtracting
-// multiples of p2r and q, while keeping the added multiples small.
-// Specifically, for q = 1 mod p2e and any a < p2e/(2*p2r), any
-// integer z can be made divisible by p2e via z' = z + u*p2r + v*q,
-// with |u|*p2r <= a and |v| <= p2e/2 -a.
-// Returns the largest absolute values of the u's and the new entries.
+// Make every entry of vec divisible by p2e by adding/subtracting q, while
+// keeping the added multiples small.  Specifically, for q = 1 mod p2e and any
+// integer z can be made divisible by p2e via z' = z + v*q, with |v| <= p2e/2.
 
-static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a, 
-                          const FHEcontext& context, ZZX& upoly, ZZX& vpoly)
+static void newMakeDivisible(ZZX& poly, long p2e, long q, 
+                          const FHEcontext& context, ZZX& vpoly)
 {
   if (p2e == 1) {
-    upoly = 0;
     vpoly = 0;
     return;
   }
 
-  //OLD: assert(q>0 && p2e>0 && p2r>0 && a>=0 && q % p2e == 1 && a % p2r == 0 && a*2 < p2e);
   helib::assertTrue<helib::InvalidArgument>(q > 0l, "q must be positive");
   helib::assertTrue<helib::InvalidArgument>(p2e > 0l, "p2e must be positive");
-  helib::assertTrue<helib::InvalidArgument>(p2r > 0l, "p2r must be positive");
-  helib::assertTrue<helib::InvalidArgument>(a >= 0l, "a must be non-negative");
 
   helib::assertEq<helib::InvalidArgument>(q % p2e, 1l, "q must equal 1 modulo p2e");
-  helib::assertEq<helib::InvalidArgument>(a % p2r, 0l, "p2r must divide a");
 
-  helib::assertTrue<helib::InvalidArgument>(a * 2 < p2e, "a must be less than half of p2e");
 
 
   long p = context.zMStar.getP();
@@ -95,14 +82,12 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
   const RecryptData& rcData = context.rcData;
   const PowerfulDCRT& p2d_conv = *rcData.p2dConv;
 
-  long aa = a / p2r;
 
   Vec<ZZ> pwrfl;
   p2d_conv.ZZXtoPowerful(pwrfl, poly);
 
 
 #ifdef DEBUG_PRINTOUT
-  Vec<ZZ> uvec(INIT_SIZE, pwrfl.length());
   Vec<ZZ> vvec(INIT_SIZE, pwrfl.length());
 #endif
   
@@ -114,29 +99,24 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
     long zMod = rem(z, p2e); // zMod is in [0,p2e-1]
     // NOTE: this makes sure we get a truly balanced remainder
     if (zMod > p2e/2 || (p==2 && zMod == p2e/2 && RandomBnd(2))) { 
-      // randomize so that u and v have expected value 0
+      // randomize so that v has expected value 0
       zMod = p2e - zMod;
-      u = zMod/p2r;
-      if (u > aa) u = aa;
     }
     else {              
       // need to add a negative number
-      u = -(zMod/p2r);
-      if (u < -aa) u = -aa;
       zMod = -zMod;
     }
-    v = zMod - u*p2r;
-    z += u*p2r + to_ZZ(q)*v; // make z divisible by p2e
+    v = zMod;
+    z += to_ZZ(q)*v; // make z divisible by p2e
 
     if (rem(z,p2e) != 0) { // sanity check
-      cerr << "**error: original z["<<i<<"]=" << (z-(u*p2r+to_ZZ(q)*v))
-	   << std::dec << ", p^r="<<p2r << ", p^e="<<p2e << endl;
-      cerr << "z' = z + "<<u<<"*p^r +"<<v<<"*q = "<<z<<endl;
+      cerr << "**error: original z["<<i<<"]=" << (z-(to_ZZ(q)*v))
+	   << std::dec << ", p^e="<<p2e << endl;
+      cerr << "z' = z + "<<v<<"*q = "<<z<<endl;
       exit(1);
     }
 
 #ifdef DEBUG_PRINTOUT
-    uvec[i] = u;
     vvec[i] = v;
 #endif
   }
@@ -144,7 +124,6 @@ static void newMakeDivisible(ZZX& poly, long p2e, long p2r, long q, long a,
   p2d_conv.powerfulToZZX(poly, pwrfl);
 
 #ifdef DEBUG_PRINTOUT
-  p2d_conv.powerfulToZZX(upoly, uvec);
   p2d_conv.powerfulToZZX(vpoly, vvec);
 #endif
   
@@ -1204,24 +1183,20 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
   }
 #endif
 
-  vector<ZZX> u, v;
-  u.resize(2);
+  vector<ZZX> v;
   v.resize(2);
 
 
-  // Add multiples of p2r and q to make the zzParts divisible by p^{e'}
+  // Add multiples of q to make the zzParts divisible by p^{e'}
   for (long i: range(2)) {
     // make divisible by p^{e'}
 
-    newMakeDivisible(zzParts[i], p2ePrime, p2r, q,
-                     trcData.a, ctxt.getContext(), u[i], v[i]);
+    newMakeDivisible(zzParts[i], p2ePrime, q, ctxt.getContext(), v[i]);
 
   }
 
 #ifdef DEBUG_PRINTOUT
   if (dbgKey) {
-    checkRecryptBounds_u(u, dbgKey->sKeys[recryptKeyID],
-		       ctxt.getContext(), q);
     checkRecryptBounds_v(v, dbgKey->sKeys[recryptKeyID],
 		       ctxt.getContext(), q);
     checkCriticalValue(zzParts, dbgKey->sKeys[recryptKeyID],
@@ -1378,71 +1353,20 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
 
 
 static void
-checkRecryptBounds_u(const vector<ZZX>& u, const DoubleCRT& sKey,
-                     const FHEcontext& context, long q)
-{
-  const RecryptData& rcData = context.rcData;
-
-  double coeff_bound = context.boundForRecryption();
-
-  long p2r = context.alMod.getPPowR();
-  long a = rcData.a;
-  long aa = a / p2r;
-  long p = context.zMStar.getP();
-  long ePrime = rcData.ePrime;
-  long pToEprimeOver2 = floor(pow(p,ePrime)/2.0);
-  long b = pToEprimeOver2 - a;
-
-  ZZX ptxt;
-  rawDecrypt(ptxt, u, sKey); // no mod q
-
-  Vec<ZZ> powerful;
-  rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
-  double max_pwrfl = conv<double>(largestCoeff(powerful));
-
-  double ratio;
-  double denom = (2*aa)*coeff_bound;
-  if (denom == 0) {
-    if (max_pwrfl == 0)
-      ratio = 0;
-    else
-      ratio = 999;
-  }
-  else {
-    ratio = max_pwrfl/denom;
-  }
-
-  FHE_STATS_UPDATE("|u|/bound", ratio);
-
-  cerr << "=== |u|/bound=" << ratio;
-  if (ratio > 1.0) cerr << " BAD-BOUND";
-
-  // these bounds should hold unconditionally
-  for (long i: range(2)) {
-    rcData.p2dConv->ZZXtoPowerful(powerful, u[i]);
-    max_pwrfl = conv<double>(largestCoeff(powerful));
-    if (max_pwrfl > aa) cerr << " BAD-BOUND-COEFF";
-  }
-
-  cerr << "\n";
-}
-
-
-static void
 checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
                      const FHEcontext& context, long q)
 {
   const RecryptData& rcData = context.rcData;
 
-  double coeff_bound = context.boundForRecryption();
 
-  long p2r = context.alMod.getPPowR();
-  long a = rcData.a;
-  long aa = a / p2r;
   long p = context.zMStar.getP();
+  long e = rcData.e;
+  long p2e = power_long(p, e);
   long ePrime = rcData.ePrime;
-  long pToEprimeOver2 = floor(pow(p,ePrime)/2.0);
-  long b = pToEprimeOver2 - a;
+  long p2ePrime = power_long(p, ePrime);
+
+  double coeff_bound = context.boundForRecryption() 
+                       * compute_fudge(p2ePrime, p2e);
 
   ZZX ptxt;
   rawDecrypt(ptxt, v, sKey); // no mod q
@@ -1451,31 +1375,13 @@ checkRecryptBounds_v(const vector<ZZX>& v, const DoubleCRT& sKey,
   rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
   double max_pwrfl = conv<double>(largestCoeff(powerful));
 
-  double ratio;
-  double denom = (2*b)*coeff_bound;
-  if (denom == 0) {
-    if (max_pwrfl == 0)
-      ratio = 0;
-    else
-      ratio = 999;
-  }
-  else {
-    ratio = max_pwrfl/denom;
-  }
+  double denom = p2ePrime*coeff_bound;
+  double ratio = max_pwrfl/denom;
 
   FHE_STATS_UPDATE("|v|/bound", ratio);
 
   cerr << "=== |v|/bound=" << ratio;
   if (ratio > 1.0) cerr << " BAD-BOUND";
-
-  // these bounds should hold unconditionally
-  for (long i: range(2)) {
-    rcData.p2dConv->ZZXtoPowerful(powerful, v[i]);
-    max_pwrfl = conv<double>(largestCoeff(powerful));
-    if (max_pwrfl > b) cerr << " BAD-BOUND-COEFF";
-  }
-
-
   cerr << "\n";
 }
 
