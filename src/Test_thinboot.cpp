@@ -113,7 +113,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   t = -GetTime();
   if (!noPrint) cout << "Generating keys, " << std::flush;
   FHESecKey secretKey(context);
-  secretKey.GenSecKey(64);      // A Hamming-weight-64 secret key
+  secretKey.GenSecKey(skHwt);      // A Hamming-weight-64 secret key
   addSome1DMatrices(secretKey); // compute key-switching matrices that we need
   addFrbMatrices(secretKey);
   if (!noPrint) cout << "computing key-dependent tables..." << std::flush;

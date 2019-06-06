@@ -124,7 +124,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   if (!noPrint) cout << "Generating keys, " << std::flush;
   FHESecKey secretKey(context);
   FHEPubKey& publicKey = secretKey;
-  secretKey.GenSecKey(64);      // A +-1/0 secret key
+  secretKey.GenSecKey(skHwt);      // A +-1/0 secret key
   addSome1DMatrices(secretKey); // compute key-switching matrices that we need
   addFrbMatrices(secretKey);
   if (!noPrint) cout << "computing key-dependent tables..." << std::flush;

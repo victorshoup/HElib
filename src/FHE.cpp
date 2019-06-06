@@ -440,8 +440,7 @@ long FHEPubKey::Encrypt(Ctxt &ctxt, const ZZX& ptxt, long ptxtSpace,
       // FIXME: why not bounded sampling?
     }
     else { 
-      e_bound = e.sampleGaussian(stdev);
-      // FIXME: why not bounded sampling?
+      e_bound = e.sampleGaussianBounded(stdev);
     }
 
     e *= ptxtSpace;
