@@ -9,6 +9,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. See accompanying LICENSE file.
  */
+
+
+// This version generates only m's that are products of distinct primes:
+// no prime powers are allowed, and no "coalescing" of distinct prime 
+// factors is allowed.  This comports with the new analysis of
+// bootstrapping.
+
+
 namespace std {}
 namespace NTL {}
 

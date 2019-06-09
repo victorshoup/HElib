@@ -167,6 +167,10 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   if (!noPrint) {
     cout << "sqr_count=" << sqr_count << "\n";
+    if (sqr_count > 0) {
+      cout << "BITS-PER-LEVEL: " 
+           << ((c1.bitCapacity()-c2.bitCapacity())/double(sqr_count)) << "\n";
+    }
     CheckCtxt(c2, "before recryption");
   }
 

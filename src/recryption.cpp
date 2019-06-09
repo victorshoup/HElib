@@ -942,8 +942,8 @@ void FHEPubKey::thinReCrypt(Ctxt &ctxt)
 
   ctxt.dropSmallAndSpecialPrimes();
 
-//#define DROP_BEFORE_THIN_RECRYPT
-#define THIN_RECRYPT_NLEVELS (2)
+#define DROP_BEFORE_THIN_RECRYPT
+#define THIN_RECRYPT_NLEVELS (3)
 #ifdef DROP_BEFORE_THIN_RECRYPT
   // experimental code...we should drop down to a reasonably low level
   // before doing the first linear map.
@@ -1117,7 +1117,7 @@ checkRecryptBounds(const vector<ZZX>& zzParts, const DoubleCRT& sKey,
   Vec<ZZ> powerful;
   rcData.p2dConv->ZZXtoPowerful(powerful, ptxt);
   double max_pwrfl = conv<double>(largestCoeff(powerful));
-  double ratio = max_pwrfl/(q*coeff_bound);
+  double ratio = max_pwrfl/(2*q*coeff_bound);
 
   FHE_STATS_UPDATE("|x|/bound", ratio);
 
