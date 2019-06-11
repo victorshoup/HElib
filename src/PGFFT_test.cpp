@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <limits>
 
 
 
@@ -20,12 +21,14 @@
 static long
 RandomBnd(long n)
 {
+   const int BPL = std::numeric_limits<unsigned long>::digits;
+   const int ROTAMT = 7;
    unsigned long x = 0;
-   long shamt = 0;
-   for (long i = 0;  i < 10; i++) {
+   for (long i = 0;  i < 12; i++) {
       unsigned long x1 = std::rand();
-      x = x ^ (x1 << shamt);
-      shamt = (shamt + 8) % 32;
+      // rotate x ROTAMT bits
+      x = (x << ROTAMT) | (x >> (BPL-ROTAMT));
+      x = x ^ x1;
    }
 
    return long(x % ((unsigned long) n));
