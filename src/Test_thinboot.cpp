@@ -102,13 +102,13 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
 
   long p2r = context.alMod.getPPowR();
 
-  fhe_stats = true;
+  if (!noPrint) fhe_stats = true;
 
   for (long numkey=0; numkey<OUTER_REP; numkey++) { // test with 3 keys
   if (fhe_stats && numkey > 0 && numkey%100 == 0) 
     print_stats(cout);
 
-  cerr << "*********** iter=" << (numkey+1) << "\n";
+  if (!noPrint) cerr << "*********** iter=" << (numkey+1) << "\n";
 
   t = -GetTime();
   if (!noPrint) cout << "Generating keys, " << std::flush;
@@ -163,7 +163,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     next_c2.multiplyBy(next_c2);
     sqr_count++;
   } 
-  while (next_c2.bitCapacity() >= 100);
+  while (next_c2.bitCapacity() >= 200);
 
   if (!noPrint) {
     cout << "sqr_count=" << sqr_count << "\n";
@@ -202,7 +202,8 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     cout << "BAD\n";
   }
 
-  printAllTimers();
+ 
+  if (!noPrint) printAllTimers();
 
   if (fhe_stats) print_stats(cout);
 

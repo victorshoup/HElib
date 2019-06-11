@@ -46,9 +46,9 @@
 #include <utility>
 #include "NumbTh.h"
 #include "zzX.h"
-#include "clonedPtr.h"
 #include "hypercube.h"
 #include "PGFFT.h"
+#include "clonedPtr.h"
 
 //NTL_CLIENT
 
@@ -101,7 +101,7 @@ class PAlgebra {
 
   std::vector<long> zmsRep; // inverse of zmsIdx
 
-  copied_ptr<PGFFT> fftInfo; // info for computing m-point complex FFT's
+  std::shared_ptr<PGFFT> fftInfo; // info for computing m-point complex FFT's
                              // copied_ptr allows delayed initialization
 
  public:

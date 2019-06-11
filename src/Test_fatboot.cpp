@@ -61,7 +61,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     phim = phi_N(m);
     helib::assertTrue(GCD(p, m) == 1, "GCD(p, m) == 1");
 
-  fhe_stats = true;
+  if (!noPrint) fhe_stats = true;
 
   if (!noPrint) {
     cout << "*** TestIt";
@@ -150,6 +150,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   secretKey.Encrypt(c1,ptxt_poly,p2r);
 
 
+  resetAllTimers();
   for (long num=0; num<INNER_REP; num++) { // multiple tests with same key
     publicKey.reCrypt(c1);
     secretKey.Decrypt(poly2,c1);
@@ -161,13 +162,12 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
   }
   }
   if (!noPrint) printAllTimers();
-  resetAllTimers();
 #if (defined(__unix__) || defined(__unix) || defined(unix))
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
     if (!noPrint) cout << "  rusage.ru_maxrss="<<rusage.ru_maxrss << endl;
 #endif
-  print_stats(cout);
+  if (fhe_stats) print_stats(cout);
 }
 
 /********************************************************************
