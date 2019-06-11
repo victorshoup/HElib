@@ -163,7 +163,7 @@ void TestIt(long p, long r, long L, long c, long skHwt, int build_cache=0)
     next_c2.multiplyBy(next_c2);
     sqr_count++;
   } 
-  while (next_c2.bitCapacity() >= 200);
+  while (next_c2.bitCapacity() >= 100);
 
   if (!noPrint) {
     cout << "sqr_count=" << sqr_count << "\n";
