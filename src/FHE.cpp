@@ -609,7 +609,7 @@ ostream& operator<<(ostream& str, const FHEPubKey& pk)
 {
   str << "[";
   writeContextBase(str, pk.getContext());
-
+ 
   // output the public encryption key itself
   str << pk.pubEncrKey << endl;
 
