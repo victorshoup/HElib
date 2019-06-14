@@ -951,6 +951,7 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
 
     // FIXME: we need to call the above removePrimes to keep the
     // code working....so it's not just for efficiency!
+    // However, I don't see why this is the case.
 
     /* Perhaps a slightly more efficient way of doing the same thing is:
        DoubleCRT key(context, ptxtPrimes); // a zero object wrt ptxtPrimes
