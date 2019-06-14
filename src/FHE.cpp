@@ -917,6 +917,7 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
 {
   FHE_TIMER_START;
   Ctxt ciphertxt(ciphertxt_orig);
+  ciphertxt.dropSmallAndSpecialPrimes();
 
   //OLD: assert(getContext()==ciphertxt.getContext());
   helib::assertEq(getContext(), ciphertxt.getContext(), "Context mismatch");

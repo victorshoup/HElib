@@ -389,7 +389,10 @@ void Ctxt::modDownToSet(const IndexSet &s)
     }
   }
 
-  if (noiseBound <= addedNoiseBound) { // a degenerate "drop down"
+  if (0 && noiseBound <= addedNoiseBound) { // a degenerate "drop down"
+    // FIXME: I'm disabling this for now.  It is essentially never
+    // invoked and I don't think we have any unit tests that test it.
+
     for (auto &part : parts)
       part.removePrimes(setDiff);  // remove the primes not in s
 
@@ -399,11 +402,15 @@ void Ctxt::modDownToSet(const IndexSet &s)
     long prodInv = 1;
     if (ptxtSpace>1)
       prodInv = InvMod(rem(context.productOfPrimes(setDiff),ptxtSpace), ptxtSpace);
+#if 0
     if (prodInv > 1) {
       for (auto &part : parts)
         part *= prodInv;
       noiseBound *= prodInv;
     }
+#else
+    if (prodInv > 1) intFactor = MulMod(intFactor, prodInv, ptxtSpace);
+#endif
     Warning("Ctxt::modDownToSet: DEGENERATE DROP");
   } 
   else {                               // do real mod switching
