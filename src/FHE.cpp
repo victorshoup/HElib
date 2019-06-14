@@ -949,8 +949,8 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
     const IndexSet extraPrimes = key.getIndexSet() / ptxtPrimes;
     key.removePrimes(extraPrimes);    // drop extra primes, for efficiency
 
-    // FIXME: we need to call the above removePrimes to keep the CKKS
-    // code working....so it's not just for efficiency.
+    // FIXME: we need to call the above removePrimes to keep the
+    // code working....so it's not just for efficiency!
 
     /* Perhaps a slightly more efficient way of doing the same thing is:
        DoubleCRT key(context, ptxtPrimes); // a zero object wrt ptxtPrimes
