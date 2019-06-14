@@ -923,7 +923,18 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
   //OLD: assert(getContext()==ciphertxt.getContext());
   helib::assertEq(getContext(), ciphertxt.getContext(), "Context mismatch");
   const IndexSet& ptxtPrimes = ciphertxt.primeSet;
+
+  if (!ptxtPrimes.disjointFrom(getContext().smallPrimes))
+    Warning("decrypting ciphertext with small primes");
+
+  // FIXME: if there are any small primes in the given ctxt,
+  // this could potentially lead to problems. In an extreme case.
+  // if the ctxt contained *only* small primes, then below,
+  // when we remove primes from skey, we would remove all primes.
+
+
   DoubleCRT ptxt(context, ptxtPrimes); // Set to zero
+
 
   // for each ciphertext part, fetch the right key, multiply and add
   for (size_t i=0; i<ciphertxt.parts.size(); i++) {
@@ -938,10 +949,8 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
     const IndexSet extraPrimes = key.getIndexSet() / ptxtPrimes;
     key.removePrimes(extraPrimes);    // drop extra primes, for efficiency
 
-    // FIXME: if ctxt contains any small primes, this could
-    // get expensive.  I tried applying dropSmallAndSpecialPrimes()
-    // and reLinearize() to the original ctxt, but this introduced
-    // errors. I'm not sure what the issue is.
+    // FIXME: we need to call the above removePrimes to keep the CKKS
+    // code working....so it's not just for efficiency.
 
     /* Perhaps a slightly more efficient way of doing the same thing is:
        DoubleCRT key(context, ptxtPrimes); // a zero object wrt ptxtPrimes
