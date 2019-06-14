@@ -262,7 +262,7 @@ class Ctxt {
 
   NTL::xdouble noiseBound;  // a high-probability bound on the the noise magnitude
 
-  long intFactor;    // an integer factor to multiply by on decryption (for BGV)
+  long intFactor;    // an integer factor to divide by on decryption (for BGV)
   NTL::xdouble ratFactor; // rational factor to divide on decryption (for CKKS)
   NTL::xdouble ptxtMag;   // bound on the plaintext size (for CKKS)
 

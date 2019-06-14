@@ -398,19 +398,10 @@ void Ctxt::modDownToSet(const IndexSet &s)
 
     // For BGV we keep the invariant that a ciphertext mod Q is
     // decrypted to intFactor*Q*m (mod p), so if we just "drop down" by
-    // a factor F we still need to multiply intFactor by (F^{-1} mod p).
-    long prodInv = 1;
-    if (ptxtSpace>1)
-      prodInv = InvMod(rem(context.productOfPrimes(setDiff),ptxtSpace), ptxtSpace);
-#if 0
-    if (prodInv > 1) {
-      for (auto &part : parts)
-        part *= prodInv;
-      noiseBound *= prodInv;
-    }
-#else
-    if (prodInv > 1) intFactor = MulMod(intFactor, prodInv, ptxtSpace);
-#endif
+    // a factor F we still need to multiply intFactor by (F mod p).
+    long F = 1;
+    if (ptxtSpace>1) F = rem(context.productOfPrimes(setDiff),ptxtSpace);
+    if (F > 1) intFactor = MulMod(intFactor, F, ptxtSpace);
     Warning("Ctxt::modDownToSet: DEGENERATE DROP");
   } 
   else {                               // do real mod switching
