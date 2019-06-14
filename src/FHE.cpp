@@ -912,10 +912,12 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt) const
   Decrypt(plaintxt, ciphertxt, f);
 }
 
-void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt,
+void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
 			ZZX& f) const // plaintext before modular reduction
 {
   FHE_TIMER_START;
+  Ctxt ciphertxt(ciphertxt_orig);
+
   //OLD: assert(getContext()==ciphertxt.getContext());
   helib::assertEq(getContext(), ciphertxt.getContext(), "Context mismatch");
   const IndexSet& ptxtPrimes = ciphertxt.primeSet;
@@ -933,6 +935,11 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt,
     DoubleCRT key = sKeys.at(keyIdx); // copy object, not a reference
     const IndexSet extraPrimes = key.getIndexSet() / ptxtPrimes;
     key.removePrimes(extraPrimes);    // drop extra primes, for efficiency
+
+    // FIXME: if ctxt contains any small primes, this could
+    // get expensive.  I tried applying dropSmallAndSpecialPrimes()
+    // and reLinearize() to the original ctxt, but this introduced
+    // errors. I'm not sure what the issue is.
 
     /* Perhaps a slightly more efficient way of doing the same thing is:
        DoubleCRT key(context, ptxtPrimes); // a zero object wrt ptxtPrimes

@@ -404,7 +404,7 @@ void Ctxt::modDownToSet(const IndexSet &s)
         part *= prodInv;
       noiseBound *= prodInv;
     }
-    cerr << "Ctxt::modDownToSet: DEGENERATE DROP\n";
+    Warning("Ctxt::modDownToSet: DEGENERATE DROP");
   } 
   else {                               // do real mod switching
 #if 1
