@@ -239,6 +239,13 @@ public:
     map.remove(s1);
   }
 
+  //! @ brief make prime set equal to s1
+  void setPrimes(const IndexSet& s1) {
+    addPrimes(s1 / getIndexSet());
+    removePrimes(getIndexSet() / s1);
+  }
+    
+
 
   /**
    * @name Arithmetic operation
