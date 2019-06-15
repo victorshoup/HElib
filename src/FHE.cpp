@@ -935,7 +935,6 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
 
   DoubleCRT ptxt(context, ptxtPrimes); // Set to zero
 
-
   // for each ciphertext part, fetch the right key, multiply and add
   for (size_t i=0; i<ciphertxt.parts.size(); i++) {
     const CtxtPart& part = ciphertxt.parts[i];
