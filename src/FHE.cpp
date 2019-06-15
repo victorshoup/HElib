@@ -964,6 +964,7 @@ void FHESecKey::Decrypt(ZZX& plaintxt, const Ctxt &ciphertxt_orig,
     if (sPower>1) {
       key.Exp(sPower);       // s^r(X^t)
     }
+
     key *= part;
     ptxt += key;
   }
