@@ -905,13 +905,13 @@ void Ctxt::equalizeRationalFactors(Ctxt& c1, Ctxt &c2)
   xdouble ratio = big.ratFactor / small.ratFactor;
   std::pair<ZZ,ZZ> factors = rationalApprox(ratio, xdouble(targetPrecision));
 
-  if (factors.first>1) {
+  if (factors.first != 1) {
       for (auto& part : small.parts)
           part *= factors.first;
       small.ratFactor *= to_xdouble(factors.first);
       small.noiseBound *= to_xdouble(factors.first);
   }
-  if (factors.second>1) {
+  if (factors.second != 1) {
       for (auto& part : big.parts)
           part *= factors.second;
       big.ratFactor *= to_xdouble(factors.second);
@@ -1579,7 +1579,7 @@ void Ctxt::frobeniusAutomorph(long j)
 /********************************************************************/
 // Utility methods
 
-const long Ctxt::getKeyID() const
+long Ctxt::getKeyID() const
 {
   for (auto& part : parts)
     if (!part.skHandle.isOne()) return part.skHandle.getSecretKeyID();

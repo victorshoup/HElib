@@ -348,11 +348,14 @@ recursivePolyEval(Ctxt& ret, const ZZX& poly, long k,
 // raise ciphertext to some power
 void Ctxt::power(long e)
 {
-  if (e <= 1) return; // nothing to do
+  if (e < 1)
+    throw helib::InvalidArgument("Cannot raise a ctxt to a non positive exponent");
+
+  if (e == 1) return; // nothing to do
 
   long ell = NTL::NumBits(e); // e < 2^l <= 2e
 
-  if (e == (1UL<<(ell-1)) ) { // e is a power of two, just square enough times
+  if (static_cast<unsigned long>(e) == (1UL<<(ell-1)) ) { // e is a power of two, just square enough times
     while (--ell > 0) square();
     return;
   }

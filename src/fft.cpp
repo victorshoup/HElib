@@ -24,7 +24,6 @@
 NTL_CLIENT
 
 
-
 static void
 basicCanonicalEmbedding(std::vector<cx_double>& v, 
                         const std::vector<double>& in, 
@@ -115,7 +114,6 @@ void embedInSlots(zzX& f, const std::vector<cx_double>& v,
         avv[m-i] = std::conj(avv[i]);
       }
     }
-
 
 
   // Compute the inverse FFT and extract the real part.
