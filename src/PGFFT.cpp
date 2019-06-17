@@ -851,11 +851,12 @@ pow2_precomp(long n, vector<long>& rev, vector<long>& rev1, vector<vector<cmplx_
 }
 
 static void
-pow2_comp(vector<cmplx_t>& a, 
+pow2_comp(cmplx_t* a, 
                   long n, long k, const vector<long>& rev, const vector<long>& rev1,
                   const vector<vector<cmplx_t>>& tab)
 {
-   vector<cmplx_t> x(a);
+   vector<cmplx_t> x;
+   x.assign(a, a+n);
 
    new_fft(&x[0], k, tab);
    if (k <= PGFFT_BRC_THRESH)
@@ -907,7 +908,7 @@ bluestein_precomp(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 
 
 static void
-bluestein_comp(vector<cmplx_t>& a, 
+bluestein_comp(cmplx_t* a, 
                   long n, long k, const vector<cmplx_t>& powers, const vector<cmplx_t>& Rb, 
                   const vector<vector<cmplx_t>>& tab)
 {
@@ -1003,7 +1004,7 @@ bluestein_precomp1(long n, vector<cmplx_t>& powers, vector<cmplx_t>& Rb,
 
 
 static void
-bluestein_comp1(vector<cmplx_t>& a, 
+bluestein_comp1(cmplx_t* a, 
                   long n, long k, const vector<cmplx_t>& powers, const vector<cmplx_t>& Rb, 
                   const vector<vector<cmplx_t>>& tab)
 {
@@ -1092,10 +1093,8 @@ PGFFT::PGFFT(long n_)
    }
 }
 
-void PGFFT::apply(vector<cmplx_t>& v) const
+void PGFFT::apply(cmplx_t* v) const
 {
-   assert(long(v.size()) == n);
-
    switch (strategy) {
 
    case PGFFT_STRATEGY_NULL: 

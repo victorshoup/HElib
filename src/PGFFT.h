@@ -78,9 +78,8 @@ public:
    // REQUIREMENT: n > 0
    explicit PGFFT(long n);
 
-   // apply n-point FFT to v
-   // REQUIREMENT: v.size() == n
-   void apply(std::vector<std::complex<double>>& v) const;
+   // apply n-point FFT to v[0..n-1]
+   void apply(std::complex<double>* v) const;
 
    // Copy/move constructors/assignment ops deleted, as future implementations
    // may not support them.  

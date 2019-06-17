@@ -284,7 +284,7 @@ TestIt(long n)
 
       vector<cmplx_t> v0(v);
 
-      pgfft.apply(v);
+      pgfft.apply(&v[0]);
 
       vector<lcx> vv(n);
       for (int i = 0; i < n; i++)

@@ -36,7 +36,7 @@ basicCanonicalEmbedding(std::vector<cx_double>& v,
   vector<cx_double> buf(m);
   for (long i: range(in.size())) buf[i] = in[i];
   for (long i: range(in.size(), m)) buf[i] = 0;
-  palg.getFFTInfo().apply(buf);
+  palg.getFFTInfo().apply(&buf[0]);
 
   v.resize(phimBy2); // the first half of Zm*
 
@@ -128,7 +128,7 @@ void embedInSlots(zzX& f, const std::vector<cx_double>& v,
 
 
   for (long i: range(m)) avv[i] = conj(avv[i]);
-  palg.getFFTInfo().apply(avv);
+  palg.getFFTInfo().apply(&avv[0]);
   vector<double> av(m);
 
   // if strictInverse we need to scale up by m, so we just skip
